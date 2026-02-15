@@ -1,4 +1,4 @@
-import { FileNode } from '../types';
+import { FileNode, GitHubRateLimitInfo } from '../types';
 import { abortIfSignaled, isAbortError } from './abortUtils';
 
 interface GitHubTreeItem {
@@ -16,6 +16,166 @@ interface GitHubTreeResponse {
   tree: GitHubTreeItem[];
   truncated: boolean;
 }
+
+interface GitHubRequestOptions {
+  signal?: AbortSignal;
+  onRateLimitUpdate?: (info: GitHubRateLimitInfo) => void;
+}
+
+const MIN_GITHUB_REQUEST_INTERVAL_MS = 120;
+const LOW_REMAINING_THRESHOLD = 8;
+const CRITICAL_REMAINING_THRESHOLD = 2;
+const MAX_QUEUE_DELAY_MS = 20_000;
+
+let githubQueue: Promise<void> = Promise.resolve();
+let lastGitHubRequestAt = 0;
+let lastKnownRateLimit: GitHubRateLimitInfo = {
+  limit: null,
+  remaining: null,
+  resetAt: null,
+};
+
+const sleepWithAbort = async (
+  ms: number,
+  signal?: AbortSignal,
+): Promise<void> => {
+  if (ms <= 0) {
+    return;
+  }
+
+  if (!signal) {
+    await new Promise((resolve) => setTimeout(resolve, ms));
+    return;
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+
+    const onAbort = () => {
+      clearTimeout(timeoutId);
+      signal.removeEventListener('abort', onAbort);
+      reject(new DOMException('Operation aborted', 'AbortError'));
+    };
+
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+};
+
+const parseRateLimitNumber = (raw: string | null): number | null => {
+  if (!raw) {
+    return null;
+  }
+
+  const value = Number.parseInt(raw, 10);
+  return Number.isFinite(value) ? value : null;
+};
+
+const parseRateLimitInfo = (
+  headers?: Pick<Headers, 'get'> | null,
+): GitHubRateLimitInfo => {
+  const limit = parseRateLimitNumber(headers?.get('x-ratelimit-limit') || null);
+  const remaining = parseRateLimitNumber(
+    headers?.get('x-ratelimit-remaining') || null,
+  );
+  const resetSeconds = parseRateLimitNumber(
+    headers?.get('x-ratelimit-reset') || null,
+  );
+
+  return {
+    limit,
+    remaining,
+    resetAt: resetSeconds !== null ? resetSeconds * 1000 : null,
+  };
+};
+
+const mergeRateLimitInfo = (
+  next: GitHubRateLimitInfo,
+  onRateLimitUpdate?: (info: GitHubRateLimitInfo) => void,
+) => {
+  const merged: GitHubRateLimitInfo = {
+    limit: next.limit ?? lastKnownRateLimit.limit,
+    remaining: next.remaining ?? lastKnownRateLimit.remaining,
+    resetAt: next.resetAt ?? lastKnownRateLimit.resetAt,
+  };
+  lastKnownRateLimit = merged;
+  onRateLimitUpdate?.(merged);
+};
+
+const getAdaptiveDelay = (rateLimit: GitHubRateLimitInfo): number => {
+  const now = Date.now();
+  const resetAt = rateLimit.resetAt;
+  const remaining = rateLimit.remaining;
+
+  if (
+    remaining !== null &&
+    resetAt !== null &&
+    remaining <= CRITICAL_REMAINING_THRESHOLD &&
+    resetAt > now
+  ) {
+    const windowMs = resetAt - now;
+    const perRequestDelay = Math.ceil(windowMs / Math.max(remaining + 1, 1));
+    return Math.min(Math.max(perRequestDelay, 2000), MAX_QUEUE_DELAY_MS);
+  }
+
+  if (remaining !== null && remaining <= LOW_REMAINING_THRESHOLD) {
+    return 650;
+  }
+
+  return 0;
+};
+
+const enqueueGitHubRequest = async <T>(
+  task: () => Promise<T>,
+  options?: GitHubRequestOptions,
+): Promise<T> => {
+  const signal = options?.signal;
+
+  const previous = githubQueue;
+  let releaseQueue = () => {};
+  githubQueue = new Promise<void>((resolve) => {
+    releaseQueue = resolve;
+  });
+
+  await previous;
+
+  try {
+    abortIfSignaled(signal);
+    const now = Date.now();
+    const minIntervalWait = Math.max(
+      MIN_GITHUB_REQUEST_INTERVAL_MS - (now - lastGitHubRequestAt),
+      0,
+    );
+    await sleepWithAbort(minIntervalWait, signal);
+
+    const adaptiveDelay = getAdaptiveDelay(lastKnownRateLimit);
+    await sleepWithAbort(adaptiveDelay, signal);
+
+    const result = await task();
+    lastGitHubRequestAt = Date.now();
+    return result;
+  } finally {
+    releaseQueue();
+  }
+};
+
+const githubFetch = async (
+  url: string,
+  options?: GitHubRequestOptions,
+): Promise<Response> => {
+  const signal = options?.signal;
+  const onRateLimitUpdate = options?.onRateLimitUpdate;
+
+  const response = await enqueueGitHubRequest(
+    () => fetch(url, { signal }),
+    options,
+  );
+
+  mergeRateLimitInfo(parseRateLimitInfo(response.headers), onRateLimitUpdate);
+  return response;
+};
 
 const getMimeType = (filename: string) => {
   const ext = filename.split('.').pop()?.toLowerCase();
@@ -131,9 +291,10 @@ const buildFileTree = (items: GitHubTreeItem[]): FileNode[] => {
 
 export const fetchRepoStructure = async (
   url: string,
-  options?: { signal?: AbortSignal },
+  options?: GitHubRequestOptions,
 ): Promise<FileNode[]> => {
   const { signal } = options || {};
+  const onRateLimitUpdate = options?.onRateLimitUpdate;
   abortIfSignaled(signal);
 
   const repoInfo = parseGitHubUrl(url);
@@ -146,9 +307,9 @@ export const fetchRepoStructure = async (
   let branch = 'main';
   try {
     abortIfSignaled(signal);
-    const repoDetailsRes = await fetch(
+    const repoDetailsRes = await githubFetch(
       `https://api.github.com/repos/${repoInfo.owner}/${repoInfo.repo}`,
-      { signal },
+      { signal, onRateLimitUpdate },
     );
 
     if (repoDetailsRes.ok) {
@@ -176,7 +337,7 @@ export const fetchRepoStructure = async (
   const apiUrl = `https://api.github.com/repos/${repoInfo.owner}/${repoInfo.repo}/git/trees/${branch}?recursive=1`;
 
   abortIfSignaled(signal);
-  const response = await fetch(apiUrl, { signal });
+  const response = await githubFetch(apiUrl, { signal, onRateLimitUpdate });
 
   if (!response.ok) {
     if (response.status === 403 || response.status === 429) {
@@ -202,9 +363,10 @@ export const fetchRepoStructure = async (
 export const fetchFileContent = async (
   url: string,
   path: string,
-  options?: { signal?: AbortSignal },
+  options?: GitHubRequestOptions,
 ): Promise<string> => {
   const { signal } = options || {};
+  const onRateLimitUpdate = options?.onRateLimitUpdate;
   abortIfSignaled(signal);
 
   const repoInfo = parseGitHubUrl(url);
@@ -212,7 +374,7 @@ export const fetchFileContent = async (
 
   const apiUrl = `https://api.github.com/repos/${repoInfo.owner}/${repoInfo.repo}/contents/${path}`;
 
-  const response = await fetch(apiUrl, { signal });
+  const response = await githubFetch(apiUrl, { signal, onRateLimitUpdate });
 
   if (!response.ok) {
     if (response.status === 403 || response.status === 429) {

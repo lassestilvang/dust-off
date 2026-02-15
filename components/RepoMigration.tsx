@@ -19,6 +19,7 @@ import {
   ExternalLink,
   FileImage,
   Square,
+  Clock3,
 } from 'lucide-react';
 import AgentLogs from './AgentLogs';
 import FileExplorer from './FileExplorer';
@@ -61,6 +62,8 @@ const RepoMigration: React.FC = () => {
     selectedNode,
     setUrl,
     setConfig,
+    setIncludeDirectories,
+    setExcludeDirectories,
     setActiveTree,
     startRepoProcess,
     cancelCurrentRun,
@@ -68,6 +71,16 @@ const RepoMigration: React.FC = () => {
     handleDownload,
     handleFileSelect,
   } = useRepoMigration();
+
+  const rateLimitResetLabel = state.githubRateLimit?.resetAt
+    ? new Date(state.githubRateLimit.resetAt).toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : 'n/a';
+
+  const selectedIncludeSet = new Set(state.includeDirectories);
+  const selectedExcludeSet = new Set(state.excludeDirectories);
 
   return (
     <>
@@ -154,6 +167,115 @@ const RepoMigration: React.FC = () => {
                   Analysis failed. Please check the URL, repository privacy
                   settings, or GitHub API limits and try again.
                 </span>
+              </div>
+            )}
+
+            {state.githubRateLimit && (
+              <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg bg-dark-900 border border-dark-600 text-xs text-gray-300">
+                <div className="flex items-center gap-1.5 text-gray-400 uppercase tracking-wide font-mono">
+                  <Github className="w-3.5 h-3.5" />
+                  Rate Limit
+                </div>
+                <span className="px-2 py-0.5 rounded bg-dark-800 border border-dark-700 font-mono">
+                  Remaining: {state.githubRateLimit.remaining ?? '--'} /{' '}
+                  {state.githubRateLimit.limit ?? '--'}
+                </span>
+                <span className="flex items-center gap-1 text-gray-400 font-mono">
+                  <Clock3 className="w-3.5 h-3.5" />
+                  Reset {rateLimitResetLabel}
+                </span>
+              </div>
+            )}
+
+            {state.repoScope && (
+              <div className="flex flex-col gap-3 p-3 rounded-lg bg-dark-900 border border-dark-600">
+                <div className="flex flex-wrap items-center gap-2 text-xs font-mono text-gray-300">
+                  <span className="px-2 py-0.5 rounded bg-dark-800 border border-dark-700">
+                    Files: {state.repoScope.filteredFiles} /{' '}
+                    {state.repoScope.totalFiles}
+                  </span>
+                  <span className="px-2 py-0.5 rounded bg-dark-800 border border-dark-700">
+                    Analyzed: {state.repoScope.analyzedFiles}
+                  </span>
+                  {state.repoScope.truncated && (
+                    <span className="px-2 py-0.5 rounded bg-yellow-900/30 border border-yellow-500/40 text-yellow-200">
+                      Truncated to first {state.repoScope.analyzedFiles} files
+                    </span>
+                  )}
+                </div>
+
+                {state.repoScope.truncated && (
+                  <p className="text-xs text-yellow-200">
+                    Large repository detected. Select directories to include or
+                    exclude, then click{' '}
+                    <span className="font-semibold">Re-analyze Repo</span> for
+                    better coverage.
+                  </p>
+                )}
+
+                {state.repoScope.availableDirectories.length > 0 && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[11px] uppercase tracking-wider text-gray-400 font-semibold">
+                        Include Directories
+                      </label>
+                      <select
+                        multiple
+                        disabled={isBusy}
+                        value={state.includeDirectories}
+                        onChange={(event) => {
+                          const value = Array.from(
+                            event.target.selectedOptions,
+                          ).map((option) => option.value);
+                          setIncludeDirectories(value);
+                        }}
+                        className="h-28 bg-dark-950 border border-dark-700 rounded-md px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-accent-500"
+                      >
+                        {state.repoScope.availableDirectories.map(
+                          (directory) => (
+                            <option
+                              key={directory}
+                              value={directory}
+                              disabled={selectedExcludeSet.has(directory)}
+                            >
+                              {directory}
+                            </option>
+                          ),
+                        )}
+                      </select>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[11px] uppercase tracking-wider text-gray-400 font-semibold">
+                        Exclude Directories
+                      </label>
+                      <select
+                        multiple
+                        disabled={isBusy}
+                        value={state.excludeDirectories}
+                        onChange={(event) => {
+                          const value = Array.from(
+                            event.target.selectedOptions,
+                          ).map((option) => option.value);
+                          setExcludeDirectories(value);
+                        }}
+                        className="h-28 bg-dark-950 border border-dark-700 rounded-md px-2 py-1 text-xs text-gray-200 focus:outline-none focus:border-accent-500"
+                      >
+                        {state.repoScope.availableDirectories.map(
+                          (directory) => (
+                            <option
+                              key={directory}
+                              value={directory}
+                              disabled={selectedIncludeSet.has(directory)}
+                            >
+                              {directory}
+                            </option>
+                          ),
+                        )}
+                      </select>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -50,6 +50,20 @@ export interface RepoVerificationResult {
   }[];
 }
 
+export interface GitHubRateLimitInfo {
+  limit: number | null;
+  remaining: number | null;
+  resetAt: number | null; // epoch ms
+}
+
+export interface RepoScopeInfo {
+  totalFiles: number;
+  filteredFiles: number;
+  analyzedFiles: number;
+  truncated: boolean;
+  availableDirectories: string[];
+}
+
 export interface LogEntry {
   id: string;
   timestamp: Date;
@@ -95,6 +109,8 @@ export interface RepoState {
   url: string;
   branch: string;
   status: AgentStatus;
+  includeDirectories: string[];
+  excludeDirectories: string[];
   files: FileNode[]; // Source files
   generatedFiles: FileNode[]; // Target (New) files
   selectedFile: string | null; // Path of currently viewed file
@@ -108,6 +124,8 @@ export interface RepoState {
   startTime?: number; // For duration calculation
   report: MigrationReport | null;
   config: MigrationConfig;
+  githubRateLimit: GitHubRateLimitInfo | null;
+  repoScope: RepoScopeInfo | null;
 }
 
 export const LANGUAGES = [

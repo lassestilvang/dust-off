@@ -22,9 +22,18 @@ import {
 } from '../types';
 import { abortIfSignaled, isAbortError } from './abortUtils';
 
-const getApiKey = () => process.env.API_KEY || '';
+const getApiKey = () =>
+  process.env.API_KEY ||
+  (process.env as Record<string, string | undefined>).GEMINI_API_KEY ||
+  '';
 
 const createClient = () => new GoogleGenAI({ apiKey: getApiKey() });
+const API_KEY_VALIDATION_CACHE_TTL_MS = 10 * 60 * 1000;
+const RETRYABLE_STATUS_CODES = new Set([408, 429, 500, 502, 503, 504]);
+const NETWORK_ERROR_PATTERN =
+  /network|fetch|timeout|temporar|econnreset|etimedout|enotfound|socket|eai_again|unavailable/i;
+
+let validatedApiKeyCache: { key: string; verifiedAt: number } | null = null;
 
 interface GeminiRequestOptions {
   abortSignal?: AbortSignal;
@@ -73,21 +82,22 @@ const withRetry = async <T>(
     }
 
     const geminiError = error as { status?: number; message?: string };
-    const isOverloaded =
-      geminiError.status === 503 ||
-      geminiError.message?.includes('503') ||
-      geminiError.message?.includes('high demand') ||
-      geminiError.message?.includes('overloaded') ||
-      geminiError.message?.includes('UNAVAILABLE');
+    const errorMessage = geminiError.message || '';
+    const isRetryable =
+      (typeof geminiError.status === 'number' &&
+        RETRYABLE_STATUS_CODES.has(geminiError.status)) ||
+      NETWORK_ERROR_PATTERN.test(errorMessage) ||
+      NETWORK_ERROR_PATTERN.test(String(error));
 
-    if (retries > 0 && isOverloaded) {
+    if (retries > 0 && isRetryable) {
+      const delayMs = Math.round(baseDelay * (0.75 + Math.random() * 0.5));
       console.warn(
-        `Gemini API overloaded (503). Retrying operation... attempts left: ${retries}`,
+        `Retrying Gemini request after transient failure (${geminiError.status ?? 'network'}). Attempts left: ${retries}`,
       );
-      await sleep(baseDelay, abortSignal);
+      await sleep(delayMs, abortSignal);
       return withRetry(fn, {
         retries: retries - 1,
-        baseDelay: baseDelay * 2,
+        baseDelay: Math.min(baseDelay * 2, 15_000),
         abortSignal,
       });
     }
@@ -173,6 +183,67 @@ const safeParseJson = <T>(text: string, fallback: T): T => {
     return JSON.parse(text) as T;
   } catch {
     return fallback;
+  }
+};
+
+export const validateGeminiApiKey = async (
+  options?: GeminiRequestOptions,
+): Promise<void> => {
+  const abortSignal = options?.abortSignal;
+  const apiKey = getApiKey().trim();
+
+  if (!apiKey) {
+    throw new Error(
+      'Gemini API key is missing. Set GEMINI_API_KEY before starting a migration.',
+    );
+  }
+
+  if (
+    validatedApiKeyCache &&
+    validatedApiKeyCache.key === apiKey &&
+    Date.now() - validatedApiKeyCache.verifiedAt <
+      API_KEY_VALIDATION_CACHE_TTL_MS
+  ) {
+    return;
+  }
+
+  const client = createClient();
+
+  try {
+    await withRetry(
+      () =>
+        client.models.generateContent({
+          model: 'gemini-3-flash-preview',
+          contents: 'Respond with: OK',
+          config: {
+            abortSignal,
+            thinkingConfig: { thinkingBudget: 128 },
+          },
+        }),
+      { retries: 2, baseDelay: 1000, abortSignal },
+    );
+
+    validatedApiKeyCache = {
+      key: apiKey,
+      verifiedAt: Date.now(),
+    };
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
+
+    const status = (error as { status?: number }).status;
+    if (status === 401 || status === 403) {
+      throw new Error(
+        'Gemini API key is invalid or unauthorized. Verify GEMINI_API_KEY and try again.',
+        { cause: error },
+      );
+    }
+
+    throw new Error(
+      'Unable to validate Gemini API key due to a temporary API or network error. Please retry.',
+      { cause: error },
+    );
   }
 };
 

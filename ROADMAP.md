@@ -12,6 +12,10 @@
 - Completed: #13 Topological file generation ordering
 - Completed: #14 Semantic cross-file context injection
 - Completed: #15 Prompt engineering improvements
+- Completed: #16 GitHub API rate limiting awareness
+- Completed: #17 Upfront Gemini API key validation
+- Completed: #18 Broadened Gemini retry logic for transient failures
+- Completed: #19 Large repo scope controls with truncation warnings
 
 ## 🏗️ ARCHITECTURE & CODE QUALITY
 
@@ -82,19 +86,19 @@
 
 ## 🛡️ RELIABILITY & ERROR HANDLING
 
-- [ ] **16. Rate limiting awareness for GitHub API**
+- [x] **16. Rate limiting awareness for GitHub API**
   No rate-limit tracking. If you're fetching 50 files sequentially, you'll burn through the 60 req/hr limit in one run. Add:
   - Rate limit header parsing (`X-RateLimit-Remaining`)
   - Queuing with delays
   - User-visible rate limit indicator
 
-- [ ] **17. Gemini API key validation**
+- [x] **17. Gemini API key validation**
   No key validation before starting a migration. Users can start a long repo analysis only to fail at the first API call. Add an upfront key check.
 
-- [ ] **18. Retry logic only handles 503**
+- [x] **18. Retry logic only handles 503**
   `withRetry` only retries on 503/overload. Gemini also throws 429 (quota), 500 (internal), and network errors. Broaden the retry surface.
 
-- [ ] **19. Graceful handling of large repos**
+- [x] **19. Graceful handling of large repos**
   Repos with >500 files are truncated silently (`limitedPaths = allPaths.slice(0, 500)`). Show a warning and let users pick which directories to include/exclude.
 
 ---

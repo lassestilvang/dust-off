@@ -1,10 +1,12 @@
 import {
   AgentStatus,
   FileNode,
+  GitHubRateLimitInfo,
   LogEntry,
   MigrationConfig,
   MigrationReport,
   RepoAnalysisResult,
+  RepoScopeInfo,
 } from '../types';
 import { fetchFileContent, fetchRepoStructure } from './githubService';
 import {
@@ -41,8 +43,11 @@ interface SemanticTargetMatch {
 
 export interface AnalyzePhaseInput {
   url: string;
+  includeDirectories: string[];
+  excludeDirectories: string[];
   addLog: AddLogFn;
   ensureDiagramApiKey: () => Promise<boolean>;
+  onGitHubRateLimitUpdate?: (info: GitHubRateLimitInfo) => void;
   abortSignal?: AbortSignal;
 }
 
@@ -50,6 +55,7 @@ export interface AnalyzePhaseResult {
   files: FileNode[];
   analysis: RepoAnalysisResult;
   diagram: string | null;
+  repoScope: RepoScopeInfo;
 }
 
 export interface ScaffoldPhaseInput {
@@ -58,6 +64,7 @@ export interface ScaffoldPhaseInput {
   analysis: RepoAnalysisResult;
   config: MigrationConfig;
   addLog: AddLogFn;
+  onGitHubRateLimitUpdate?: (info: GitHubRateLimitInfo) => void;
   abortSignal?: AbortSignal;
 }
 
@@ -109,6 +116,87 @@ export const flattenFiles = (nodes: FileNode[]): FileNode[] => {
     }
   });
   return result;
+};
+
+const normalizeDirectoryList = (directories: string[]): string[] => {
+  return Array.from(
+    new Set(
+      directories
+        .map((directory) => directory.trim().replace(/^\/+|\/+$/g, ''))
+        .filter(Boolean),
+    ),
+  ).sort();
+};
+
+const pathInDirectory = (path: string, directory: string): boolean => {
+  return path === directory || path.startsWith(`${directory}/`);
+};
+
+const applyDirectoryScope = (
+  filePaths: string[],
+  includeDirectories: string[],
+  excludeDirectories: string[],
+): string[] => {
+  const includes = normalizeDirectoryList(includeDirectories);
+  const excludes = normalizeDirectoryList(excludeDirectories);
+
+  let scopedPaths = [...filePaths];
+
+  if (includes.length > 0) {
+    scopedPaths = scopedPaths.filter((path) =>
+      includes.some((directory) => pathInDirectory(path, directory)),
+    );
+  }
+
+  if (excludes.length > 0) {
+    scopedPaths = scopedPaths.filter(
+      (path) => !excludes.some((directory) => pathInDirectory(path, directory)),
+    );
+  }
+
+  return scopedPaths;
+};
+
+const extractAvailableDirectories = (filePaths: string[]): string[] => {
+  return Array.from(
+    new Set(
+      filePaths
+        .map((path) => path.split('/').slice(0, -1))
+        .filter((parts) => parts.length > 0)
+        .map((parts) => parts[0]),
+    ),
+  ).sort();
+};
+
+const pruneTreeToScopedFiles = (
+  nodes: FileNode[],
+  scopedFilePaths: Set<string>,
+): FileNode[] => {
+  const prunedNodes: FileNode[] = [];
+
+  for (const node of nodes) {
+    if (node.type === 'file') {
+      if (scopedFilePaths.has(node.path)) {
+        prunedNodes.push(node);
+      }
+      continue;
+    }
+
+    if (node.type === 'dir') {
+      const childNodes = node.children
+        ? pruneTreeToScopedFiles(node.children, scopedFilePaths)
+        : [];
+
+      if (childNodes.length > 0) {
+        prunedNodes.push({
+          ...node,
+          children: childNodes,
+        });
+      }
+    }
+  }
+
+  return prunedNodes;
 };
 
 export const buildTreeFromPaths = (paths: string[]): FileNode[] => {
@@ -585,8 +673,11 @@ const collectCrossFileConsistencyIssues = (
 
 export const runAnalyzePhase = async ({
   url,
+  includeDirectories,
+  excludeDirectories,
   addLog,
   ensureDiagramApiKey,
+  onGitHubRateLimitUpdate,
   abortSignal,
 }: AnalyzePhaseInput): Promise<AnalyzePhaseResult> => {
   abortIfSignaled(abortSignal);
@@ -595,10 +686,31 @@ export const runAnalyzePhase = async ({
     'info',
     AgentStatus.ANALYZING,
   );
-  const files = await fetchRepoStructure(url, { signal: abortSignal });
+  const files = await fetchRepoStructure(url, {
+    signal: abortSignal,
+    onRateLimitUpdate: onGitHubRateLimitUpdate,
+  });
+
+  const allFilePaths = flattenFiles(files)
+    .filter((file) => file.type === 'file')
+    .map((file) => file.path);
+  const availableDirectories = extractAvailableDirectories(allFilePaths);
+  const scopedFilePaths = applyDirectoryScope(
+    allFilePaths,
+    includeDirectories,
+    excludeDirectories,
+  );
+
+  if (scopedFilePaths.length === 0) {
+    throw new Error(
+      'No files matched the selected include/exclude directories. Adjust the filters and retry.',
+    );
+  }
+
+  const scopedFiles = pruneTreeToScopedFiles(files, new Set(scopedFilePaths));
 
   addLog(
-    `File index built: ${flattenFiles(files).length} nodes detected.`,
+    `File index built: ${allFilePaths.length} source files detected.`,
     'success',
     AgentStatus.ANALYZING,
   );
@@ -611,7 +723,10 @@ export const runAnalyzePhase = async ({
   let readme: string;
 
   try {
-    readme = await fetchFileContent(url, 'README.md', { signal: abortSignal });
+    readme = await fetchFileContent(url, 'README.md', {
+      signal: abortSignal,
+      onRateLimitUpdate: onGitHubRateLimitUpdate,
+    });
   } catch (error) {
     if (isAbortError(error)) {
       throw error;
@@ -619,6 +734,7 @@ export const runAnalyzePhase = async ({
     try {
       readme = await fetchFileContent(url, 'readme.md', {
         signal: abortSignal,
+        onRateLimitUpdate: onGitHubRateLimitUpdate,
       });
     } catch (readmeError) {
       if (isAbortError(readmeError)) {
@@ -639,8 +755,31 @@ export const runAnalyzePhase = async ({
     AgentStatus.ANALYZING,
   );
 
-  const allPaths = flattenFiles(files).map((file) => file.path);
-  const limitedPaths = allPaths.slice(0, MAX_ANALYSIS_PATHS);
+  const truncated = scopedFilePaths.length > MAX_ANALYSIS_PATHS;
+  if (truncated) {
+    addLog(
+      `Large repository scope: analyzing first ${MAX_ANALYSIS_PATHS} of ${scopedFilePaths.length} files. Refine include/exclude directories to target a smaller subset.`,
+      'warning',
+      AgentStatus.ANALYZING,
+    );
+  }
+
+  if (includeDirectories.length > 0 || excludeDirectories.length > 0) {
+    addLog(
+      `Scope filters applied. Include: ${includeDirectories.length || 0}, Exclude: ${excludeDirectories.length || 0}.`,
+      'info',
+      AgentStatus.ANALYZING,
+    );
+  }
+
+  const limitedPaths = scopedFilePaths.slice(0, MAX_ANALYSIS_PATHS);
+  const repoScope: RepoScopeInfo = {
+    totalFiles: allFilePaths.length,
+    filteredFiles: scopedFilePaths.length,
+    analyzedFiles: limitedPaths.length,
+    truncated,
+    availableDirectories,
+  };
 
   const analysis = await analyzeRepository(
     JSON.stringify(limitedPaths),
@@ -704,7 +843,7 @@ export const runAnalyzePhase = async ({
     }
   }
 
-  return { files, analysis, diagram };
+  return { files: scopedFiles, analysis, diagram, repoScope };
 };
 
 export const runScaffoldPhase = async ({
@@ -713,6 +852,7 @@ export const runScaffoldPhase = async ({
   analysis,
   config,
   addLog,
+  onGitHubRateLimitUpdate,
   abortSignal,
 }: ScaffoldPhaseInput): Promise<ScaffoldPhaseResult> => {
   abortIfSignaled(abortSignal);
@@ -741,6 +881,7 @@ export const runScaffoldPhase = async ({
     try {
       const content = await fetchFileContent(url, file.path, {
         signal: abortSignal,
+        onRateLimitUpdate: onGitHubRateLimitUpdate,
       });
       sourceContext += `\n\n--- FILE: ${file.path} ---\n${content}`;
       fileContents[file.path] = content;

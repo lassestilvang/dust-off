@@ -8,6 +8,7 @@ import { DEFAULT_SOURCE_CODE } from '../constants';
 import {
   analyzeCode,
   convertCode,
+  validateGeminiApiKey,
   verifyCode,
 } from '../services/geminiService';
 import {
@@ -81,6 +82,9 @@ const SnippetMigration: React.FC = () => {
     const runStep = async () => {
       try {
         if (state.status === AgentStatus.ANALYZING) {
+          addLog('Validating Gemini API key...', 'info');
+          await validateGeminiApiKey();
+          addLog('Gemini API key validated.', 'success');
           addLog(
             `Analyzing ${state.sourceLang} source AST and dependencies...`,
             'info',

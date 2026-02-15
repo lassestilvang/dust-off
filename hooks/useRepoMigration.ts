@@ -10,10 +10,12 @@ import JSZip from 'jszip';
 import {
   AgentStatus,
   FileNode,
+  GitHubRateLimitInfo,
   LogEntry,
   MigrationConfig,
   MigrationReport,
   RepoAnalysisResult,
+  RepoScopeInfo,
   RepoState,
 } from '../types';
 import { fetchFileContent } from '../services/githubService';
@@ -28,6 +30,7 @@ import {
 } from '../services/migrationOrchestrator';
 import { useMigrationLogs } from './useMigrationLogs';
 import { isAbortError } from '../services/abortUtils';
+import { validateGeminiApiKey } from '../services/geminiService';
 
 declare global {
   interface Window {
@@ -42,6 +45,8 @@ const initialRepoState: RepoState = {
   url: '',
   branch: 'main',
   status: AgentStatus.IDLE,
+  includeDirectories: [],
+  excludeDirectories: [],
   files: [],
   generatedFiles: [],
   selectedFile: null,
@@ -58,14 +63,30 @@ const initialRepoState: RepoState = {
     stateManagement: 'context',
     testingLibrary: 'vitest',
   },
+  githubRateLimit: null,
+  repoScope: null,
+};
+
+const normalizeDirectories = (directories: string[]): string[] => {
+  return Array.from(
+    new Set(
+      directories
+        .map((directory) => directory.trim().replace(/^\/+|\/+$/g, ''))
+        .filter(Boolean),
+    ),
+  ).sort();
 };
 
 type RepoAction =
   | { type: 'set_url'; payload: string }
   | { type: 'set_status'; payload: AgentStatus }
   | { type: 'reset_for_analysis' }
+  | { type: 'set_include_directories'; payload: string[] }
+  | { type: 'set_exclude_directories'; payload: string[] }
   | { type: 'set_files'; payload: FileNode[] }
   | { type: 'set_analysis'; payload: RepoAnalysisResult }
+  | { type: 'set_repo_scope'; payload: RepoScopeInfo | null }
+  | { type: 'set_github_rate_limit'; payload: GitHubRateLimitInfo | null }
   | { type: 'set_diagram'; payload: string | null }
   | { type: 'set_source_context'; payload: string }
   | { type: 'set_generated_files'; payload: FileNode[] }
@@ -131,8 +152,32 @@ const repoReducer = (state: RepoState, action: RepoAction): RepoState => {
         diagram: null,
         sourceContext: '',
         report: null,
+        githubRateLimit: null,
+        repoScope: null,
         startTime: Date.now(),
       };
+
+    case 'set_include_directories': {
+      const includeDirectories = normalizeDirectories(action.payload);
+      return {
+        ...state,
+        includeDirectories,
+        excludeDirectories: state.excludeDirectories.filter(
+          (directory) => !includeDirectories.includes(directory),
+        ),
+      };
+    }
+
+    case 'set_exclude_directories': {
+      const excludeDirectories = normalizeDirectories(action.payload);
+      return {
+        ...state,
+        excludeDirectories,
+        includeDirectories: state.includeDirectories.filter(
+          (directory) => !excludeDirectories.includes(directory),
+        ),
+      };
+    }
 
     case 'set_files':
       return { ...state, files: action.payload };
@@ -145,6 +190,12 @@ const repoReducer = (state: RepoState, action: RepoAction): RepoState => {
         targetLang: 'Next.js + TypeScript',
         status: AgentStatus.PLANNING,
       };
+
+    case 'set_repo_scope':
+      return { ...state, repoScope: action.payload };
+
+    case 'set_github_rate_limit':
+      return { ...state, githubRateLimit: action.payload };
 
     case 'set_diagram':
       return { ...state, diagram: action.payload };
@@ -223,6 +274,8 @@ interface UseRepoMigrationResult {
   selectedNode: FileNode | null;
   setUrl: (url: string) => void;
   setConfig: (config: MigrationConfig) => void;
+  setIncludeDirectories: (directories: string[]) => void;
+  setExcludeDirectories: (directories: string[]) => void;
   setActiveTree: (tree: 'source' | 'target') => void;
   startRepoProcess: () => Promise<void>;
   cancelCurrentRun: () => void;
@@ -269,9 +322,24 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
     dispatch({ type: 'set_config', payload: config });
   }, []);
 
+  const setIncludeDirectories = useCallback((directories: string[]) => {
+    dispatch({ type: 'set_include_directories', payload: directories });
+  }, []);
+
+  const setExcludeDirectories = useCallback((directories: string[]) => {
+    dispatch({ type: 'set_exclude_directories', payload: directories });
+  }, []);
+
   const setActiveTree = useCallback((tree: 'source' | 'target') => {
     dispatch({ type: 'set_active_tree', payload: tree });
   }, []);
+
+  const handleGitHubRateLimitUpdate = useCallback(
+    (info: GitHubRateLimitInfo) => {
+      dispatch({ type: 'set_github_rate_limit', payload: info });
+    },
+    [],
+  );
 
   const cancelCurrentRun = useCallback(() => {
     if (!activeControllerRef.current) {
@@ -314,7 +382,7 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
   }, [addLog]);
 
   const startRepoProcess = useCallback(async () => {
-    const { url } = stateRef.current;
+    const { url, includeDirectories, excludeDirectories } = stateRef.current;
 
     if (!url) {
       addLog('Please enter a valid GitHub URL.', 'error');
@@ -327,15 +395,31 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
     activeControllerRef.current = controller;
 
     try {
+      addLog(
+        'Validating Gemini API key before analysis...',
+        'info',
+        AgentStatus.ANALYZING,
+      );
+      await validateGeminiApiKey({ abortSignal: controller.signal });
+      addLog(
+        'Gemini API key validation succeeded.',
+        'success',
+        AgentStatus.ANALYZING,
+      );
+
       const result = await runAnalyzePhase({
         url,
+        includeDirectories,
+        excludeDirectories,
         addLog,
         ensureDiagramApiKey,
+        onGitHubRateLimitUpdate: handleGitHubRateLimitUpdate,
         abortSignal: controller.signal,
       });
 
       dispatch({ type: 'set_files', payload: result.files });
       dispatch({ type: 'set_analysis', payload: result.analysis });
+      dispatch({ type: 'set_repo_scope', payload: result.repoScope });
 
       if (result.diagram) {
         dispatch({ type: 'set_diagram', payload: result.diagram });
@@ -360,7 +444,7 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
       }
       cancelRequestedRef.current = false;
     }
-  }, [addLog, ensureDiagramApiKey]);
+  }, [addLog, ensureDiagramApiKey, handleGitHubRateLimitUpdate]);
 
   const startMigration = useCallback(async () => {
     const currentState = stateRef.current;
@@ -381,6 +465,7 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
         analysis: currentState.analysis,
         config: currentState.config,
         addLog,
+        onGitHubRateLimitUpdate: handleGitHubRateLimitUpdate,
         abortSignal: controller.signal,
       });
 
@@ -497,7 +582,7 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
       }
       cancelRequestedRef.current = false;
     }
-  }, [addLog]);
+  }, [addLog, handleGitHubRateLimitUpdate]);
 
   const handleConfigConfirm = useCallback(() => {
     setShowConfigModal(false);
@@ -550,40 +635,45 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
     }
   }, [addLog]);
 
-  const handleFileSelect = useCallback(async (path: string) => {
-    dispatch({ type: 'set_selected_file', payload: path });
+  const handleFileSelect = useCallback(
+    async (path: string) => {
+      dispatch({ type: 'set_selected_file', payload: path });
 
-    const currentState = stateRef.current;
-    if (currentState.activeTree !== 'source') {
-      return;
-    }
+      const currentState = stateRef.current;
+      if (currentState.activeTree !== 'source') {
+        return;
+      }
 
-    const node = flattenFiles(currentState.files).find(
-      (file) => file.path === path,
-    );
-    if (!node || node.type !== 'file' || node.content !== undefined) {
-      return;
-    }
+      const node = flattenFiles(currentState.files).find(
+        (file) => file.path === path,
+      );
+      if (!node || node.type !== 'file' || node.content !== undefined) {
+        return;
+      }
 
-    try {
-      const content = await fetchFileContent(currentState.url, path);
-      dispatch({
-        type: 'update_file_content',
-        payload: { path, content, tree: 'source' },
-      });
-    } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
-      dispatch({
-        type: 'update_file_content',
-        payload: {
-          path,
-          content: `// Error loading content for ${path}\n// ${errorMessage}`,
-          tree: 'source',
-        },
-      });
-    }
-  }, []);
+      try {
+        const content = await fetchFileContent(currentState.url, path, {
+          onRateLimitUpdate: handleGitHubRateLimitUpdate,
+        });
+        dispatch({
+          type: 'update_file_content',
+          payload: { path, content, tree: 'source' },
+        });
+      } catch (error: unknown) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        dispatch({
+          type: 'update_file_content',
+          payload: {
+            path,
+            content: `// Error loading content for ${path}\n// ${errorMessage}`,
+            tree: 'source',
+          },
+        });
+      }
+    },
+    [handleGitHubRateLimitUpdate],
+  );
 
   const selectedNode = useMemo(() => {
     if (!state.selectedFile) {
@@ -623,6 +713,8 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
     selectedNode,
     setUrl,
     setConfig,
+    setIncludeDirectories,
+    setExcludeDirectories,
     setActiveTree,
     startRepoProcess,
     cancelCurrentRun,
