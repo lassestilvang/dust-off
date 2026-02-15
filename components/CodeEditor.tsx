@@ -80,9 +80,9 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
 
   return (
     <div
-      className={`flex flex-col h-full rounded-xl overflow-hidden border transition-all duration-300 ${highlight ? 'border-brand-500/50 shadow-[0_0_20px_rgba(34,197,94,0.1)]' : 'border-dark-700'}`}
+      className={`flex flex-col h-full rounded-xl overflow-hidden border transition-all duration-300 ${highlight ? 'border-accent-500/50 shadow-[0_0_20px_rgba(245,158,11,0.1)]' : 'border-dark-700'}`}
     >
-      <div className="bg-dark-900 px-4 py-2 border-b border-dark-700 flex justify-between items-center shrink-0">
+      <div className="bg-dark-900/80 px-4 py-2 border-b border-dark-700/80 flex justify-between items-center shrink-0">
         <div className="flex items-center gap-2">
           {getHeaderIcon()}
           <span className="text-sm font-semibold text-gray-300">{title}</span>
@@ -107,13 +107,27 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
           textareaClassName="focus:outline-none"
         />
         {!code && !readOnly && (
-          <div className="absolute top-4 left-4 text-gray-600 pointer-events-none font-mono text-sm">
-            // Paste your code here...
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <div className="text-dark-600/60 mb-3">
+              <span className="font-mono text-3xl font-light tracking-wider">
+                &lt;/&gt;
+              </span>
+            </div>
+            <span className="text-dark-600 font-mono text-sm">
+              // Paste your legacy code here...
+            </span>
           </div>
         )}
         {!code && readOnly && (
-          <div className="absolute top-4 left-4 text-gray-600 pointer-events-none font-mono text-sm">
-            // Waiting for output...
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <div className="text-dark-600/40 mb-3">
+              <span className="font-mono text-2xl tracking-wider opacity-60">
+                ▸ _
+              </span>
+            </div>
+            <span className="text-dark-600 font-mono text-sm">
+              // Awaiting generation...
+            </span>
           </div>
         )}
       </div>

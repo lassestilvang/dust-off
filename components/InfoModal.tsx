@@ -24,10 +24,10 @@ const InfoModal: React.FC<InfoModalProps> = ({ type, onClose }) => {
 
         {type === 'about' && (
           <div className="p-8">
-            <div className="w-16 h-16 bg-brand-500/10 rounded-2xl flex items-center justify-center mb-6 border border-brand-500/20">
-              <Bot className="w-8 h-8 text-brand-400" />
+            <div className="w-16 h-16 bg-accent-500/10 rounded-2xl flex items-center justify-center mb-6 border border-accent-500/20">
+              <Bot className="w-8 h-8 text-accent-400" />
             </div>
-            <h2 className="text-2xl font-bold text-white mb-4">
+            <h2 className="text-2xl font-display font-bold text-white mb-4">
               What is DustOff?
             </h2>
             <div className="space-y-4 text-gray-300 leading-relaxed">
@@ -35,7 +35,7 @@ const InfoModal: React.FC<InfoModalProps> = ({ type, onClose }) => {
                 The <strong className="text-white">DustOff</strong> is an
                 autonomous agent designed to solve one of software engineering's
                 most tedious challenges:{' '}
-                <span className="text-brand-400">Legacy Modernization</span>.
+                <span className="text-accent-400">Legacy Modernization</span>.
               </p>
               <p>
                 Powered by Google's{' '}
@@ -77,13 +77,15 @@ const InfoModal: React.FC<InfoModalProps> = ({ type, onClose }) => {
             <div className="w-16 h-16 bg-blue-500/10 rounded-2xl flex items-center justify-center mb-6 border border-blue-500/20">
               <Workflow className="w-8 h-8 text-blue-400" />
             </div>
-            <h2 className="text-2xl font-bold text-white mb-8">How it Works</h2>
+            <h2 className="text-2xl font-display font-bold text-white mb-8">
+              How it Works
+            </h2>
 
             {/* Timeline Container */}
             <div className="relative space-y-12 pl-16 before:absolute before:left-7 before:top-3 before:bottom-3 before:w-0.5 before:bg-dark-700 before:-translate-x-1/2">
               <div className="relative">
-                <div className="absolute -left-12 top-0.5 w-6 h-6 rounded-full bg-dark-900 border-2 border-brand-500 flex items-center justify-center z-10 shadow-[0_0_10px_rgba(0,0,0,0.5)]">
-                  <span className="w-2 h-2 rounded-full bg-brand-500"></span>
+                <div className="absolute -left-12 top-0.5 w-6 h-6 rounded-full bg-dark-900 border-2 border-accent-500 flex items-center justify-center z-10 shadow-[0_0_10px_rgba(0,0,0,0.5)]">
+                  <span className="w-2 h-2 rounded-full bg-accent-500"></span>
                 </div>
                 <h3 className="text-lg font-bold text-white mb-2">
                   1. Deep Analysis

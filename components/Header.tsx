@@ -13,16 +13,16 @@ const Header: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="relative">
-              <div className="absolute inset-0 bg-brand-500 blur-lg opacity-20 animate-pulse"></div>
-              <div className="bg-brand-500/10 p-2 rounded-lg border border-brand-500/20 relative">
-                <Bot className="w-6 h-6 text-brand-400" />
+              <div className="absolute inset-0 bg-accent-500 blur-lg opacity-20 animate-pulse"></div>
+              <div className="bg-accent-500/10 p-2 rounded-lg border border-accent-500/20 relative">
+                <Bot className="w-6 h-6 text-accent-400" />
               </div>
             </div>
             <div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
+              <h1 className="text-xl font-bold font-display bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
                 DustOff
               </h1>
-              <p className="text-xs text-gray-400 font-mono tracking-wider">
+              <p className="text-xs text-accent-500/70 font-mono tracking-wider">
                 AUTONOMOUS MIGRATION AGENT
               </p>
             </div>
@@ -32,7 +32,7 @@ const Header: React.FC = () => {
             <nav className="hidden md:flex items-center gap-1 bg-dark-800/50 p-1 rounded-lg border border-dark-700/50">
               <button
                 onClick={() => setInfoModal('about')}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-dark-700 rounded-md transition-all"
+                className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-400 hover:text-accent-400 hover:bg-dark-700 rounded-md transition-all"
               >
                 <HelpCircle className="w-4 h-4" />
                 <span>What is this?</span>
@@ -40,14 +40,14 @@ const Header: React.FC = () => {
               <div className="w-px h-4 bg-dark-700"></div>
               <button
                 onClick={() => setInfoModal('how-it-works')}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-400 hover:text-white hover:bg-dark-700 rounded-md transition-all"
+                className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-400 hover:text-accent-400 hover:bg-dark-700 rounded-md transition-all"
               >
                 <BookOpen className="w-4 h-4" />
                 <span>How it Works</span>
               </button>
             </nav>
 
-            <div className="hidden lg:flex items-center gap-2 text-sm text-gray-400 border-l border-dark-700 pl-6">
+            <div className="hidden lg:flex items-center gap-2 text-sm text-accent-500/60 border-l border-dark-700 pl-6">
               <Terminal className="w-4 h-4" />
               <span className="font-mono">v2.1.0-beta</span>
             </div>

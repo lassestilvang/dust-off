@@ -28,18 +28,18 @@ const ConfigOption = ({
       flex flex-col items-start p-4 rounded-xl border transition-all duration-200 text-left w-full h-full relative overflow-hidden group
       ${
         selected
-          ? 'bg-brand-900/20 border-brand-500/50 shadow-[0_0_15px_rgba(34,197,94,0.1)]'
+          ? 'bg-accent-900/20 border-accent-500/50 shadow-[0_0_15px_rgba(245,158,11,0.1)]'
           : 'bg-dark-800 border-dark-700 hover:border-dark-600 hover:bg-dark-750'
       }
     `}
   >
     {selected && (
-      <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-brand-500 flex items-center justify-center animate-in zoom-in">
+      <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-accent-500 flex items-center justify-center animate-in zoom-in">
         <Check className="w-3 h-3 text-white" strokeWidth={3} />
       </div>
     )}
     <Icon
-      className={`w-6 h-6 mb-3 ${selected ? 'text-brand-400' : 'text-gray-500 group-hover:text-gray-400'}`}
+      className={`w-6 h-6 mb-3 ${selected ? 'text-accent-400' : 'text-gray-500 group-hover:text-gray-400'}`}
     />
     <h3
       className={`font-semibold mb-1 ${selected ? 'text-white' : 'text-gray-300'}`}
@@ -67,7 +67,7 @@ const MigrationConfigModal: React.FC<MigrationConfigProps> = ({
         <div className="p-6 border-b border-dark-700 flex items-center justify-between bg-dark-800/50">
           <div>
             <h2 className="text-xl font-bold text-white flex items-center gap-2">
-              <span className="bg-clip-text text-transparent bg-gradient-to-r from-brand-400 to-blue-500">
+              <span className="bg-clip-text text-transparent bg-gradient-to-r from-accent-400 to-orange-500 font-display">
                 Configure Stack
               </span>
             </h2>
@@ -82,7 +82,7 @@ const MigrationConfigModal: React.FC<MigrationConfigProps> = ({
           {/* Section: UI Framework */}
           <section>
             <div className="flex items-center gap-2 mb-4">
-              <Palette className="w-4 h-4 text-brand-400" />
+              <Palette className="w-4 h-4 text-accent-400" />
               <h3 className="text-sm font-bold text-gray-300 uppercase tracking-wider">
                 UI Framework
               </h3>
@@ -175,7 +175,7 @@ const MigrationConfigModal: React.FC<MigrationConfigProps> = ({
           </button>
           <button
             onClick={onConfirm}
-            className="px-6 py-2 bg-brand-600 hover:bg-brand-500 text-white font-bold rounded-lg shadow-lg shadow-brand-900/20 transition-all transform hover:scale-105"
+            className="px-6 py-2 bg-accent-600 hover:bg-accent-500 text-white font-bold rounded-lg shadow-lg shadow-accent-900/20 transition-all transform hover:scale-105"
           >
             Start Migration
           </button>

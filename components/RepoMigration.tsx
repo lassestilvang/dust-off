@@ -648,7 +648,7 @@ const RepoMigration: React.FC = () => {
               </span>
 
               {/* PHP Example */}
-              <div className="flex items-center rounded-md bg-dark-900 border border-dark-600 overflow-hidden transition-colors hover:border-brand-500/50">
+              <div className="flex items-center rounded-md bg-dark-900 border border-dark-600 overflow-hidden transition-colors hover:border-accent-500/50">
                 <button
                   onClick={() =>
                     setState((prev) => ({
@@ -674,7 +674,7 @@ const RepoMigration: React.FC = () => {
               </div>
 
               {/* Vue Example */}
-              <div className="flex items-center rounded-md bg-dark-900 border border-dark-600 overflow-hidden transition-colors hover:border-brand-500/50">
+              <div className="flex items-center rounded-md bg-dark-900 border border-dark-600 overflow-hidden transition-colors hover:border-accent-500/50">
                 <button
                   onClick={() =>
                     setState((prev) => ({
@@ -712,7 +712,7 @@ const RepoMigration: React.FC = () => {
                 placeholder="https://github.com/username/repository"
                 className={`
                             w-full bg-dark-900 border rounded-lg pl-10 pr-4 py-3 text-gray-200 focus:outline-none transition-colors
-                            ${state.status === AgentStatus.ERROR ? 'border-red-500/50 focus:border-red-500' : 'border-dark-600 focus:border-brand-500'}
+                            ${state.status === AgentStatus.ERROR ? 'border-red-500/50 focus:border-red-500' : 'border-dark-600 focus:border-accent-500'}
                         `}
               />
             </div>
@@ -737,7 +737,7 @@ const RepoMigration: React.FC = () => {
                         flex items-center justify-center gap-2 py-2 px-4 rounded-lg font-bold text-sm transition-all whitespace-nowrap w-full md:w-auto
                         ${
                           !isAnalyzed && state.url
-                            ? 'bg-brand-600 hover:bg-brand-500 text-white shadow-[0_0_15px_rgba(34,197,94,0.3)]'
+                            ? 'bg-accent-600 hover:bg-accent-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.3)]'
                             : 'bg-dark-700 hover:bg-dark-600 text-gray-300 border border-dark-600'
                         }
                         ${state.status === AgentStatus.ANALYZING || !state.url ? 'opacity-70 cursor-not-allowed' : ''}
@@ -791,7 +791,7 @@ const RepoMigration: React.FC = () => {
                             flex items-center justify-center gap-2 py-2 px-6 rounded-lg font-bold text-sm transition-all whitespace-nowrap w-full md:w-auto
                             ${
                               isAnalyzed
-                                ? 'bg-brand-600 hover:bg-brand-500 text-white shadow-[0_0_15px_rgba(34,197,94,0.3)] animate-in fade-in zoom-in-95'
+                                ? 'bg-accent-600 hover:bg-accent-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.3)] animate-in fade-in zoom-in-95'
                                 : 'bg-dark-800 text-gray-600 cursor-not-allowed border border-dark-700'
                             }
                             `}
@@ -828,7 +828,7 @@ const RepoMigration: React.FC = () => {
                 <div
                   className={`
                             w-5 h-5 rounded border flex items-center justify-center transition-colors
-                            ${includeTests ? 'bg-brand-600 border-brand-500' : 'bg-dark-900 border-dark-600'}
+                            ${includeTests ? 'bg-accent-600 border-accent-500' : 'bg-dark-900 border-dark-600'}
                         `}
                 >
                   {includeTests && <Check className="w-3.5 h-3.5 text-white" />}
@@ -873,9 +873,9 @@ const RepoMigration: React.FC = () => {
                     </span>
                   </div>
                   <ArrowRight className="w-4 h-4 text-gray-600" />
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-brand-900/20 border border-brand-500/30">
-                    <NextjsIcon className="w-4 h-4 text-brand-400" />
-                    <span className="text-brand-100 text-xs font-bold uppercase">
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-accent-900/20 border border-accent-500/30">
+                    <NextjsIcon className="w-4 h-4 text-accent-400" />
+                    <span className="text-accent-100 text-xs font-bold uppercase">
                       Next.js 16.1
                     </span>
                   </div>
@@ -904,7 +904,7 @@ const RepoMigration: React.FC = () => {
                 {state.diagram ? (
                   <div
                     onClick={() => setIsDiagramOpen(true)}
-                    className="group relative w-48 h-28 bg-dark-900 rounded-lg border border-dark-600 overflow-hidden cursor-pointer hover:border-brand-500/50 transition-all shadow-md"
+                    className="group relative w-48 h-28 bg-dark-900 rounded-lg border border-dark-600 overflow-hidden cursor-pointer hover:border-accent-500/50 transition-all shadow-md"
                   >
                     <img
                       src={state.diagram}
@@ -925,7 +925,7 @@ const RepoMigration: React.FC = () => {
                     {state.status === AgentStatus.ANALYZING ||
                     state.status === AgentStatus.PLANNING ? (
                       <>
-                        <Loader2 className="w-5 h-5 animate-spin text-brand-500" />
+                        <Loader2 className="w-5 h-5 animate-spin text-accent-500" />
                         <span className="text-xs">Generating Diagram...</span>
                       </>
                     ) : (
@@ -1026,12 +1026,12 @@ const RepoMigration: React.FC = () => {
                 <div className="flex-1 flex flex-col items-center justify-center text-gray-500 p-8">
                   <div className="w-20 h-20 bg-dark-700/50 rounded-full flex items-center justify-center mb-6 border border-dark-600/50">
                     {state.activeTree === 'source' ? (
-                      <Database className="w-10 h-10 text-blue-400/50" />
+                      <Database className="w-10 h-10 text-amber-400/50" />
                     ) : (
-                      <Layout className="w-10 h-10 text-brand-400/50" />
+                      <Layout className="w-10 h-10 text-accent-400/50" />
                     )}
                   </div>
-                  <h3 className="text-xl font-medium text-gray-200">
+                  <h3 className="text-xl font-display font-medium text-gray-200">
                     {state.activeTree === 'source'
                       ? 'Legacy Codebase'
                       : 'Modern Next.js Project'}

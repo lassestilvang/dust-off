@@ -83,8 +83,8 @@ const FileItem: React.FC<{
   node: FileNode;
   depth: number;
   onSelect: (path: string) => void;
-  selected: boolean;
-}> = ({ node, depth, onSelect, selected }) => {
+  selectedFile: string | null;
+}> = ({ node, depth, onSelect, selectedFile }) => {
   const [isOpen, setIsOpen] = React.useState(true);
 
   // Styling constants
@@ -124,7 +124,7 @@ const FileItem: React.FC<{
                 node={child}
                 depth={depth + 1}
                 onSelect={onSelect}
-                selected={selected}
+                selectedFile={selectedFile}
               />
             ))}
           </div>
@@ -133,40 +133,41 @@ const FileItem: React.FC<{
     );
   }
 
+  const isSelected = selectedFile === node.path;
   const { icon: Icon, color } = getFileIconConfig(node.name);
 
   return (
     <div
       className={`
         flex items-center py-1.5 pr-2 cursor-pointer transition-all border-l-2 gap-1 group relative overflow-hidden
-        ${selected ? 'bg-brand-900/20 border-brand-500 text-brand-100' : 'border-transparent hover:bg-dark-800 text-gray-400'}
+        ${isSelected ? 'bg-accent-900/20 border-accent-500 text-accent-100' : 'border-transparent hover:bg-dark-800 text-gray-400'}
       `}
       style={rowStyle}
       onClick={() => onSelect(node.path)}
     >
-      {selected && (
-        <div className="absolute inset-0 bg-brand-500/5 pointer-events-none" />
+      {isSelected && (
+        <div className="absolute inset-0 bg-accent-500/5 pointer-events-none" />
       )}
 
       {/* Spacer to align with chevron */}
       <span className="w-4 h-4 shrink-0" />
 
       <Icon
-        className={`w-4 h-4 shrink-0 mr-1.5 ${selected ? color : `${color} opacity-70 group-hover:opacity-100`}`}
+        className={`w-4 h-4 shrink-0 mr-1.5 ${isSelected ? color : `${color} opacity-70 group-hover:opacity-100`}`}
       />
 
       <span
-        className={`text-xs truncate flex-1 transition-colors ${selected ? 'font-medium' : 'font-normal'}`}
+        className={`text-xs truncate flex-1 transition-colors ${isSelected ? 'font-medium' : 'font-normal'}`}
       >
         {node.name}
       </span>
 
       {/* Status Icons aligned to right */}
       {node.status === 'migrating' && (
-        <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-400 shrink-0" />
+        <Loader2 className="w-3.5 h-3.5 animate-spin text-accent-400 shrink-0" />
       )}
       {node.status === 'done' && (
-        <CheckCircle className="w-3.5 h-3.5 text-brand-500 shrink-0" />
+        <CheckCircle className="w-3.5 h-3.5 text-green-500 shrink-0" />
       )}
       {node.status === 'error' && (
         <AlertCircle className="w-3.5 h-3.5 text-red-500 shrink-0" />
@@ -189,7 +190,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
           onClick={() => onToggleTree('source')}
           className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-xs font-bold transition-all ${
             activeTree === 'source'
-              ? 'bg-dark-800 text-white shadow-sm ring-1 ring-dark-700'
+              ? 'bg-blue-900/20 text-blue-300 border border-blue-500/20 shadow-[0_0_10px_rgba(59,130,246,0.1)]'
               : 'text-gray-500 hover:text-gray-300 hover:bg-dark-800/50'
           }`}
         >
@@ -202,12 +203,12 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
           onClick={() => onToggleTree('target')}
           className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-md text-xs font-bold transition-all ${
             activeTree === 'target'
-              ? 'bg-brand-900/20 text-brand-400 border border-brand-500/20 shadow-[0_0_10px_rgba(34,197,94,0.1)]'
+              ? 'bg-accent-900/20 text-accent-400 border border-accent-500/20 shadow-[0_0_10px_rgba(245,158,11,0.1)]'
               : 'text-gray-500 hover:text-gray-300 hover:bg-dark-800/50'
           }`}
         >
           <Layout
-            className={`w-3.5 h-3.5 ${activeTree === 'target' ? 'text-brand-400' : 'text-gray-500'}`}
+            className={`w-3.5 h-3.5 ${activeTree === 'target' ? 'text-accent-400' : 'text-gray-500'}`}
           />
           Next.js
         </button>
@@ -217,28 +218,30 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
           <div className="h-full flex flex-col items-center justify-center p-4 text-center text-gray-600">
             {activeTree === 'source' ? (
               <>
-                <Database className="w-8 h-8 mb-2 opacity-20" />
+                <Database className="w-8 h-8 mb-2 opacity-20 text-accent-600/40" />
                 <p className="text-xs italic">
                   Load a repository to view source files
                 </p>
               </>
             ) : (
               <>
-                <Layout className="w-8 h-8 mb-2 opacity-20" />
+                <Layout className="w-8 h-8 mb-2 opacity-20 text-accent-600/40" />
                 <p className="text-xs italic">Project structure pending...</p>
               </>
             )}
           </div>
         ) : (
-          files.map((node) => (
-            <FileItem
-              key={node.path}
-              node={node}
-              depth={0}
-              onSelect={onSelectFile}
-              selected={selectedFile === node.path}
-            />
-          ))
+          <div className="cascade-in">
+            {files.map((node) => (
+              <FileItem
+                key={node.path}
+                node={node}
+                depth={0}
+                onSelect={onSelectFile}
+                selectedFile={selectedFile}
+              />
+            ))}
+          </div>
         )}
       </div>
     </div>

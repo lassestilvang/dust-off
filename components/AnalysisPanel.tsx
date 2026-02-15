@@ -20,11 +20,13 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ analysis }) => {
   return (
     <div className="bg-dark-800 rounded-xl border border-dark-700 p-5 space-y-4 animate-in fade-in zoom-in-95 duration-500 shadow-lg">
       <div className="flex items-center gap-2 mb-2 pb-2 border-b border-dark-700">
-        <FileSearch className="w-5 h-5 text-brand-400" />
-        <h3 className="text-lg font-semibold text-white">Migration Analysis</h3>
+        <FileSearch className="w-5 h-5 text-accent-400" />
+        <h3 className="text-lg font-display font-semibold text-white">
+          Migration Analysis
+        </h3>
       </div>
 
-      <p className="text-gray-300 text-sm leading-relaxed border-l-2 border-brand-500/50 pl-3">
+      <p className="text-gray-300 text-sm leading-relaxed border-l-2 border-accent-500/50 pl-3">
         {analysis.summary}
       </p>
 

@@ -212,7 +212,7 @@ const SnippetMigration: React.FC = () => {
             </div>
 
             <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-              <FileCode2 className="w-4 h-4 text-brand-500" />
+              <FileCode2 className="w-4 h-4 text-accent-500" />
               Snippet Config
             </h2>
 
@@ -232,7 +232,7 @@ const SnippetMigration: React.FC = () => {
                       }))
                     }
                     disabled={state.status !== AgentStatus.IDLE}
-                    className="w-full bg-dark-900 border border-dark-600 rounded-lg pl-3 pr-8 py-2.5 text-sm text-gray-200 focus:border-brand-500 focus:outline-none transition-colors appearance-none"
+                    className="w-full bg-dark-900 border border-dark-600 rounded-lg pl-3 pr-8 py-2.5 text-sm text-gray-200 focus:border-accent-500 focus:outline-none transition-colors appearance-none"
                   >
                     {LANGUAGES.map((l) => (
                       <option key={l.id} value={l.id}>
@@ -267,7 +267,7 @@ const SnippetMigration: React.FC = () => {
                       }))
                     }
                     disabled={state.status !== AgentStatus.IDLE}
-                    className="w-full bg-dark-900 border border-dark-600 rounded-lg pl-3 pr-8 py-2.5 text-sm text-gray-200 focus:border-brand-500 focus:outline-none transition-colors appearance-none"
+                    className="w-full bg-dark-900 border border-dark-600 rounded-lg pl-3 pr-8 py-2.5 text-sm text-gray-200 focus:border-accent-500 focus:outline-none transition-colors appearance-none"
                   >
                     {LANGUAGES.map((l) => (
                       <option key={l.id} value={l.id}>
@@ -289,7 +289,7 @@ const SnippetMigration: React.FC = () => {
                   w-full flex items-center justify-center gap-2 py-3 rounded-lg font-bold text-sm transition-all duration-300 mt-2
                   ${
                     state.status === AgentStatus.IDLE
-                      ? 'bg-brand-600 hover:bg-brand-500 text-white shadow-[0_0_20px_rgba(34,197,94,0.2)]'
+                      ? 'bg-accent-600 hover:bg-accent-500 text-white shadow-[0_0_20px_rgba(245,158,11,0.2)]'
                       : 'bg-dark-700 hover:bg-dark-600 text-gray-300'
                   }
                 `}

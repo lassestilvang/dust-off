@@ -19,13 +19,13 @@ describe('StepIndicator', () => {
 
     const planningStep = screen.getByText('Planning');
     // The parent div of the text has the class logic, but we can check the text color
-    expect(planningStep).toHaveClass('text-brand-400');
+    expect(planningStep).toHaveClass('text-accent-400');
   });
 
   it('marks previous steps as completed', () => {
     render(<StepIndicator currentStatus={AgentStatus.PLANNING} />);
 
     const analysisStep = screen.getByText('Analysis');
-    expect(analysisStep).toHaveClass('text-gray-300');
+    expect(analysisStep).toHaveClass('text-green-300');
   });
 });

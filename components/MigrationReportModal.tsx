@@ -29,11 +29,11 @@ const MigrationReportModal: React.FC<MigrationReportModalProps> = ({
         {/* Header */}
         <div className="p-6 border-b border-dark-700 flex items-start justify-between bg-gradient-to-r from-dark-900 to-dark-800">
           <div className="flex gap-4">
-            <div className="w-12 h-12 rounded-full bg-brand-500/20 flex items-center justify-center border border-brand-500/30">
-              <CheckCircle2 className="w-7 h-7 text-brand-500" />
+            <div className="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center border border-green-500/30">
+              <CheckCircle2 className="w-7 h-7 text-green-500" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-white tracking-tight">
+              <h2 className="text-2xl font-display font-bold text-white tracking-tight">
                 Migration Accomplished
               </h2>
               <div className="flex items-center gap-2 mt-1 text-gray-400 text-sm font-mono">
@@ -63,7 +63,7 @@ const MigrationReportModal: React.FC<MigrationReportModalProps> = ({
                   Modernization Score
                 </span>
                 <span
-                  className={`text-xs font-bold px-2 py-0.5 rounded ${report.modernizationScore > 80 ? 'bg-brand-500/20 text-brand-400' : 'bg-yellow-500/20 text-yellow-400'}`}
+                  className={`text-xs font-bold px-2 py-0.5 rounded ${report.modernizationScore > 80 ? 'bg-accent-500/20 text-accent-400' : 'bg-yellow-500/20 text-yellow-400'}`}
                 >
                   {report.modernizationScore > 80 ? 'EXCELLENT' : 'GOOD'}
                 </span>
@@ -76,7 +76,7 @@ const MigrationReportModal: React.FC<MigrationReportModalProps> = ({
               </div>
               <div className="w-full bg-dark-900 h-1.5 rounded-full mt-2 overflow-hidden">
                 <div
-                  className="h-full bg-brand-500 rounded-full transition-all duration-1000"
+                  className="h-full bg-accent-500 rounded-full transition-all duration-1000"
                   style={{ width: `${report.modernizationScore}%` }}
                 />
               </div>
@@ -149,7 +149,7 @@ const MigrationReportModal: React.FC<MigrationReportModalProps> = ({
                     {change.from}
                   </span>
                   <div className="bg-dark-800 rounded-full p-1 border border-dark-700 shrink-0">
-                    <ArrowRight className="w-4 h-4 text-brand-500" />
+                    <ArrowRight className="w-4 h-4 text-accent-500" />
                   </div>
                   <span
                     className="text-sm text-white font-mono font-semibold flex-1 text-left truncate"
@@ -175,8 +175,8 @@ const MigrationReportModal: React.FC<MigrationReportModalProps> = ({
                     key={idx}
                     className="flex items-start gap-3 text-sm text-gray-300"
                   >
-                    <div className="mt-0.5 w-5 h-5 rounded-full bg-brand-500/10 flex items-center justify-center shrink-0 border border-brand-500/20">
-                      <CheckCircle2 className="w-3 h-3 text-brand-400" />
+                    <div className="mt-0.5 w-5 h-5 rounded-full bg-green-500/10 flex items-center justify-center shrink-0 border border-green-500/20">
+                      <CheckCircle2 className="w-3 h-3 text-green-400" />
                     </div>
                     {imp}
                   </li>
@@ -210,7 +210,7 @@ const MigrationReportModal: React.FC<MigrationReportModalProps> = ({
                   <span className="text-gray-400 text-sm">
                     Architecture Type
                   </span>
-                  <span className="text-brand-400 font-mono text-sm">
+                  <span className="text-accent-400 font-mono text-sm">
                     App Router (Server Components)
                   </span>
                 </div>
@@ -229,7 +229,7 @@ const MigrationReportModal: React.FC<MigrationReportModalProps> = ({
           </button>
           <button
             onClick={onDownload}
-            className="px-6 py-2.5 rounded-lg font-bold text-sm bg-brand-600 hover:bg-brand-500 text-white transition-colors shadow-lg shadow-brand-900/40 flex items-center gap-2"
+            className="px-6 py-2.5 rounded-lg font-bold text-sm bg-accent-600 hover:bg-accent-500 text-white transition-colors shadow-lg shadow-accent-900/40 flex items-center gap-2"
           >
             <Download className="w-4 h-4" />
             Download Project

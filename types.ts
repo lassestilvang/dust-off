@@ -91,6 +91,7 @@ export interface RepoState {
   sourceContext: string; // Aggregated content of source files for context
   startTime?: number; // For duration calculation
   report: MigrationReport | null;
+  config: MigrationConfig;
 }
 
 export const LANGUAGES = [

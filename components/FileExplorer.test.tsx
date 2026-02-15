@@ -88,6 +88,6 @@ describe('FileExplorer', () => {
     );
     // We can check for a class that indicates selection
     const readme = screen.getByText('README.md').closest('div');
-    expect(readme).toHaveClass('border-brand-500'); // Based on FileItem implementation
+    expect(readme).toHaveClass('border-accent-500'); // Based on FileItem implementation
   });
 });
