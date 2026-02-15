@@ -29,8 +29,8 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks: {
             'react-vendor': ['react', 'react-dom'],
-            'genai': ['@google/genai'],
-            'lucide': ['lucide-react'],
+            genai: ['@google/genai'],
+            lucide: ['lucide-react'],
           },
         },
       },
