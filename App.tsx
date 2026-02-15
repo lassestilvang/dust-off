@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Header from './components/Header';
 import SnippetMigration from './components/SnippetMigration';
 import RepoMigration from './components/RepoMigration';
@@ -24,12 +24,44 @@ const CODE_RAIN_CHARS = [
   'gulp.',
 ];
 
+type ThemeMode = 'dark' | 'light';
+
+const THEME_STORAGE_KEY = 'dustoff-theme';
+
+const getInitialTheme = (): ThemeMode => {
+  if (typeof window === 'undefined') {
+    return 'dark';
+  }
+
+  const persisted = window.localStorage.getItem(THEME_STORAGE_KEY);
+  if (persisted === 'dark' || persisted === 'light') {
+    return persisted;
+  }
+
+  if (window.matchMedia?.('(prefers-color-scheme: light)').matches) {
+    return 'light';
+  }
+
+  return 'dark';
+};
+
 const App: React.FC = () => {
   const [mode, setMode] = useState<'snippet' | 'repo'>('repo');
+  const [theme, setTheme] = useState<ThemeMode>(getInitialTheme);
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    document.documentElement.style.colorScheme = theme;
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((previousTheme) => (previousTheme === 'dark' ? 'light' : 'dark'));
+  };
 
   return (
     <div className="h-screen flex flex-col font-sans selection:bg-accent-500/30 overflow-hidden bg-dark-900">
-      <Header />
+      <Header theme={theme} onToggleTheme={toggleTheme} />
 
       <main className="flex-1 w-full max-w-[1600px] mx-auto px-4 py-4 flex flex-col gap-4 min-h-0">
         {/* Hero Section */}
@@ -65,12 +97,14 @@ const App: React.FC = () => {
           <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-4 bg-dark-800/40 p-4">
             <div className="text-left flex-1">
               <h2 className="text-lg font-bold tracking-tight flex items-center gap-2 font-display">
-                <span className="text-white">Dust off your legacy code.</span>
+                <span className="text-foreground-primary">
+                  Dust off your legacy code.
+                </span>
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent-400 to-accent-600">
                   Ship modern.
                 </span>
               </h2>
-              <p className="text-gray-400 text-xs flex items-center gap-1.5 mt-1">
+              <p className="text-foreground-muted text-xs flex items-center gap-1.5 mt-1">
                 <Sparkles className="w-3 h-3 text-accent-400" />
                 Autonomous refactoring from legacy frameworks to modern
                 architecture that Coding LLMs love.
@@ -79,7 +113,7 @@ const App: React.FC = () => {
               {/* Visual Metaphor: Old → New */}
               <div className="flex items-center gap-3 mt-3">
                 <span
-                  className="font-mono text-[11px] text-gray-600 line-through opacity-60"
+                  className="font-mono text-[11px] text-foreground-subtle line-through opacity-60"
                   style={{ filter: 'sepia(0.8) brightness(0.7)' }}
                 >
                   {'<'}div onClick={'{'}handler{'}'}
@@ -113,7 +147,7 @@ const App: React.FC = () => {
                   onClick={() => setMode('repo')}
                   className={`
                     relative z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors duration-300
-                    ${mode === 'repo' ? 'text-white' : 'text-gray-500 hover:text-gray-300'}
+                    ${mode === 'repo' ? 'text-white' : 'text-foreground-subtle hover:text-foreground-muted'}
                   `}
                 >
                   <GitBranch className="w-3.5 h-3.5" />
@@ -123,7 +157,7 @@ const App: React.FC = () => {
                   onClick={() => setMode('snippet')}
                   className={`
                     relative z-10 flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors duration-300
-                    ${mode === 'snippet' ? 'text-white' : 'text-gray-500 hover:text-gray-300'}
+                    ${mode === 'snippet' ? 'text-white' : 'text-foreground-subtle hover:text-foreground-muted'}
                   `}
                 >
                   <Code2 className="w-3.5 h-3.5" />
@@ -140,13 +174,13 @@ const App: React.FC = () => {
         </div>
 
         {/* Footer */}
-        <footer className="text-center py-1 text-[10px] text-gray-600 font-mono shrink-0 select-none">
+        <footer className="text-center py-1 text-[10px] text-foreground-subtle font-mono shrink-0 select-none">
           Crafted in{' '}
           <a
             href="https://en.wikipedia.org/wiki/Copenhagen"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-gray-500 hover:text-accent-400 transition-colors border-b border-transparent hover:border-accent-400/50"
+            className="text-foreground-subtle hover:text-accent-400 transition-colors border-b border-transparent hover:border-accent-400/50"
           >
             Copenhagen
           </a>{' '}
@@ -155,7 +189,7 @@ const App: React.FC = () => {
             href="https://github.com/features/copilot/cli"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-gray-500 hover:text-accent-400 transition-colors border-b border-transparent hover:border-accent-400/50"
+            className="text-foreground-subtle hover:text-accent-400 transition-colors border-b border-transparent hover:border-accent-400/50"
           >
             GitHub Copilot CLI
           </a>{' '}
@@ -164,7 +198,7 @@ const App: React.FC = () => {
             href="https://dev.to/challenges/github-2026-01-21"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-gray-500 hover:text-accent-400 transition-colors border-b border-transparent hover:border-accent-400/50"
+            className="text-foreground-subtle hover:text-accent-400 transition-colors border-b border-transparent hover:border-accent-400/50"
           >
             GitHub Copilot CLI Challenge
           </a>

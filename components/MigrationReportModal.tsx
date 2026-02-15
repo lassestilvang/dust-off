@@ -33,7 +33,7 @@ const MigrationReportModal: React.FC<MigrationReportModalProps> = ({
               <CheckCircle2 className="w-7 h-7 text-green-500" />
             </div>
             <div>
-              <h2 className="text-2xl font-display font-bold text-white tracking-tight">
+              <h2 className="text-2xl font-display font-bold text-foreground-primary tracking-tight">
                 Migration Accomplished
               </h2>
               <div className="flex items-center gap-2 mt-1 text-gray-400 text-sm font-mono">
@@ -45,7 +45,7 @@ const MigrationReportModal: React.FC<MigrationReportModalProps> = ({
           </div>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-dark-700 rounded-lg transition-colors text-gray-400 hover:text-white"
+            className="p-2 hover:bg-dark-700 rounded-lg transition-colors text-gray-400 hover:text-foreground-primary"
           >
             <X className="w-6 h-6" />
           </button>
@@ -69,7 +69,7 @@ const MigrationReportModal: React.FC<MigrationReportModalProps> = ({
                 </span>
               </div>
               <div className="flex items-end gap-2">
-                <span className="text-4xl font-bold text-white">
+                <span className="text-4xl font-bold text-foreground-primary">
                   {report.modernizationScore}
                 </span>
                 <span className="text-lg text-gray-500 mb-1">/100</span>
@@ -132,7 +132,7 @@ const MigrationReportModal: React.FC<MigrationReportModalProps> = ({
 
           {/* Tech Stack Transformation */}
           <div>
-            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+            <h3 className="text-lg font-bold text-foreground-primary mb-4 flex items-center gap-2">
               <Layers className="w-5 h-5 text-gray-400" />
               Tech Stack Transformation
             </h3>
@@ -152,7 +152,7 @@ const MigrationReportModal: React.FC<MigrationReportModalProps> = ({
                     <ArrowRight className="w-4 h-4 text-accent-500" />
                   </div>
                   <span
-                    className="text-sm text-white font-mono font-semibold flex-1 text-left truncate"
+                    className="text-sm text-foreground-primary font-mono font-semibold flex-1 text-left truncate"
                     title={change.to}
                   >
                     {change.to}
@@ -165,7 +165,7 @@ const MigrationReportModal: React.FC<MigrationReportModalProps> = ({
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {/* Key Wins */}
             <div>
-              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+              <h3 className="text-lg font-bold text-foreground-primary mb-4 flex items-center gap-2">
                 <Zap className="w-5 h-5 text-yellow-400" />
                 Key Engineering Wins
               </h3>
@@ -194,7 +194,7 @@ const MigrationReportModal: React.FC<MigrationReportModalProps> = ({
                   <span className="text-gray-400 text-sm">
                     Total Files Processed
                   </span>
-                  <span className="text-white font-mono">
+                  <span className="text-foreground-primary font-mono">
                     {report.totalFiles}
                   </span>
                 </div>
@@ -202,7 +202,7 @@ const MigrationReportModal: React.FC<MigrationReportModalProps> = ({
                   <span className="text-gray-400 text-sm">
                     New Dependencies Added
                   </span>
-                  <span className="text-white font-mono">
+                  <span className="text-foreground-primary font-mono">
                     {report.newDependencies}
                   </span>
                 </div>
@@ -223,7 +223,7 @@ const MigrationReportModal: React.FC<MigrationReportModalProps> = ({
         <div className="p-6 border-t border-dark-700 bg-dark-800 rounded-b-2xl flex justify-end gap-3 sticky bottom-0">
           <button
             onClick={onClose}
-            className="px-6 py-2.5 rounded-lg font-bold text-sm bg-dark-700 hover:bg-dark-600 text-white transition-colors border border-dark-600"
+            className="px-6 py-2.5 rounded-lg font-bold text-sm bg-dark-700 hover:bg-dark-600 text-foreground-primary transition-colors border border-dark-600"
           >
             Review Code
           </button>

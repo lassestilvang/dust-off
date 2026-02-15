@@ -21,7 +21,7 @@ const AnalysisPanel: React.FC<AnalysisPanelProps> = ({ analysis }) => {
     <div className="bg-dark-800 rounded-xl border border-dark-700 p-5 space-y-4 animate-in fade-in zoom-in-95 duration-500 shadow-lg">
       <div className="flex items-center gap-2 mb-2 pb-2 border-b border-dark-700">
         <FileSearch className="w-5 h-5 text-accent-400" />
-        <h3 className="text-lg font-display font-semibold text-white">
+        <h3 className="text-lg font-display font-semibold text-foreground-primary">
           Migration Analysis
         </h3>
       </div>

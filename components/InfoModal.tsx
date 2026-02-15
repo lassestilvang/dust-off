@@ -17,7 +17,7 @@ const InfoModal: React.FC<InfoModalProps> = ({ type, onClose }) => {
       >
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 p-2 rounded-lg text-gray-400 hover:text-white hover:bg-dark-800 transition-colors z-10"
+          className="absolute top-4 right-4 p-2 rounded-lg text-gray-400 hover:text-foreground-primary hover:bg-dark-800 transition-colors z-10"
         >
           <X className="w-5 h-5" />
         </button>
@@ -27,28 +27,28 @@ const InfoModal: React.FC<InfoModalProps> = ({ type, onClose }) => {
             <div className="w-16 h-16 bg-accent-500/10 rounded-2xl flex items-center justify-center mb-6 border border-accent-500/20">
               <Bot className="w-8 h-8 text-accent-400" />
             </div>
-            <h2 className="text-2xl font-display font-bold text-white mb-4">
+            <h2 className="text-2xl font-display font-bold text-foreground-primary mb-4">
               What is DustOff?
             </h2>
             <div className="space-y-4 text-gray-300 leading-relaxed">
               <p>
-                The <strong className="text-white">DustOff</strong> is an
-                autonomous agent designed to solve one of software engineering's
-                most tedious challenges:{' '}
+                The <strong className="text-foreground-primary">DustOff</strong>{' '}
+                is an autonomous agent designed to solve one of software
+                engineering's most tedious challenges:{' '}
                 <span className="text-accent-400">Legacy Modernization</span>.
               </p>
               <p>
                 Powered by Google's{' '}
-                <strong className="text-white">Gemini 3</strong>, it doesn't
-                just translate syntax line-by-line. It understands the{' '}
-                <em>intent</em> of your legacy code (whether it's jQuery, Python
-                2, or old PHP) and re-architects it into production-ready modern
-                frameworks like{' '}
+                <strong className="text-foreground-primary">Gemini 3</strong>,
+                it doesn't just translate syntax line-by-line. It understands
+                the <em>intent</em> of your legacy code (whether it's jQuery,
+                Python 2, or old PHP) and re-architects it into production-ready
+                modern frameworks like{' '}
                 <strong>Next.js 16.1, React, and TypeScript</strong>.
               </p>
               <div className="grid grid-cols-2 gap-4 mt-6">
                 <div className="bg-dark-800 p-4 rounded-xl border border-dark-700">
-                  <h3 className="font-semibold text-white mb-1 flex items-center gap-2">
+                  <h3 className="font-semibold text-foreground-primary mb-1 flex items-center gap-2">
                     <Code2 className="w-4 h-4 text-blue-400" />
                     Context Aware
                   </h3>
@@ -58,7 +58,7 @@ const InfoModal: React.FC<InfoModalProps> = ({ type, onClose }) => {
                   </p>
                 </div>
                 <div className="bg-dark-800 p-4 rounded-xl border border-dark-700">
-                  <h3 className="font-semibold text-white mb-1 flex items-center gap-2">
+                  <h3 className="font-semibold text-foreground-primary mb-1 flex items-center gap-2">
                     <Zap className="w-4 h-4 text-yellow-400" />
                     Self-Healing
                   </h3>
@@ -77,7 +77,7 @@ const InfoModal: React.FC<InfoModalProps> = ({ type, onClose }) => {
             <div className="w-16 h-16 bg-blue-500/10 rounded-2xl flex items-center justify-center mb-6 border border-blue-500/20">
               <Workflow className="w-8 h-8 text-blue-400" />
             </div>
-            <h2 className="text-2xl font-display font-bold text-white mb-8">
+            <h2 className="text-2xl font-display font-bold text-foreground-primary mb-8">
               How it Works
             </h2>
 
@@ -87,7 +87,7 @@ const InfoModal: React.FC<InfoModalProps> = ({ type, onClose }) => {
                 <div className="absolute -left-12 top-0.5 w-6 h-6 rounded-full bg-dark-900 border-2 border-accent-500 flex items-center justify-center z-10 shadow-[0_0_10px_rgba(0,0,0,0.5)]">
                   <span className="w-2 h-2 rounded-full bg-accent-500"></span>
                 </div>
-                <h3 className="text-lg font-bold text-white mb-2">
+                <h3 className="text-lg font-bold text-foreground-primary mb-2">
                   1. Deep Analysis
                 </h3>
                 <p className="text-sm text-gray-400 leading-relaxed">
@@ -101,7 +101,7 @@ const InfoModal: React.FC<InfoModalProps> = ({ type, onClose }) => {
                 <div className="absolute -left-12 top-0.5 w-6 h-6 rounded-full bg-dark-900 border-2 border-blue-500 flex items-center justify-center z-10 shadow-[0_0_10px_rgba(0,0,0,0.5)]">
                   <span className="w-2 h-2 rounded-full bg-blue-500"></span>
                 </div>
-                <h3 className="text-lg font-bold text-white mb-2">
+                <h3 className="text-lg font-bold text-foreground-primary mb-2">
                   2. Strategic Planning
                 </h3>
                 <p className="text-sm text-gray-400 leading-relaxed">
@@ -115,7 +115,7 @@ const InfoModal: React.FC<InfoModalProps> = ({ type, onClose }) => {
                 <div className="absolute -left-12 top-0.5 w-6 h-6 rounded-full bg-dark-900 border-2 border-purple-500 flex items-center justify-center z-10 shadow-[0_0_10px_rgba(0,0,0,0.5)]">
                   <span className="w-2 h-2 rounded-full bg-purple-500"></span>
                 </div>
-                <h3 className="text-lg font-bold text-white mb-2">
+                <h3 className="text-lg font-bold text-foreground-primary mb-2">
                   3. Autonomous Refactoring
                 </h3>
                 <p className="text-sm text-gray-400 leading-relaxed">
@@ -129,7 +129,7 @@ const InfoModal: React.FC<InfoModalProps> = ({ type, onClose }) => {
                 <div className="absolute -left-12 top-0.5 w-6 h-6 rounded-full bg-dark-900 border-2 border-green-500 flex items-center justify-center z-10 shadow-[0_0_10px_rgba(0,0,0,0.5)]">
                   <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
                 </div>
-                <h3 className="text-lg font-bold text-white mb-2">
+                <h3 className="text-lg font-bold text-foreground-primary mb-2">
                   4. Verification & Reporting
                 </h3>
                 <p className="text-sm text-gray-400 leading-relaxed">
@@ -145,7 +145,7 @@ const InfoModal: React.FC<InfoModalProps> = ({ type, onClose }) => {
         <div className="p-6 bg-dark-800/50 border-t border-dark-700 mt-auto shrink-0">
           <button
             onClick={onClose}
-            className="w-full py-3 bg-dark-700 hover:bg-dark-600 text-white rounded-xl font-bold transition-colors border border-dark-600 shadow-lg"
+            className="w-full py-3 bg-dark-700 hover:bg-dark-600 text-foreground-primary rounded-xl font-bold transition-colors border border-dark-600 shadow-lg"
           >
             Got it
           </button>

@@ -52,7 +52,7 @@ const StepIndicator: React.FC<StepIndicatorProps> = ({ currentStatus }) => {
             <div
               className={`
               w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300
-              ${state === 'completed' ? 'bg-green-500 border-green-500 text-dark-900' : ''}
+              ${state === 'completed' ? 'bg-green-500 border-green-500 text-slate-950' : ''}
               ${state === 'active' ? 'bg-dark-800 border-accent-500 text-accent-500 shadow-[0_0_15px_rgba(245,158,11,0.3)]' : ''}
               ${state === 'waiting' ? 'bg-dark-800 border-dark-600 text-dark-500' : ''}
             `}

@@ -49,7 +49,7 @@ const getFileIconConfig = (filename: string) => {
   if (name.includes('vite.config'))
     return { icon: ViteIcon, color: 'text-purple-400' };
   if (name.includes('next.config'))
-    return { icon: NextjsIcon, color: 'text-white' };
+    return { icon: NextjsIcon, color: 'text-foreground-primary' };
   if (name.includes('readme'))
     return { icon: FileText, color: 'text-gray-300' };
   if (name.includes('docker')) return { icon: Box, color: 'text-blue-500' };

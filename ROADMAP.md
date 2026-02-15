@@ -21,6 +21,7 @@
 - Completed: #22 Keyboard shortcuts
 - Completed: #23 Mobile responsiveness improvements
 - Completed: #24 Copy-to-clipboard for generated code
+- Completed: #25 Dark/light theme toggle
 
 ## 🏗️ ARCHITECTURE & CODE QUALITY
 
@@ -127,7 +128,7 @@
 - [x] **24. Copy-to-clipboard for generated code**
       No way to quickly copy a single file's generated code without downloading the whole zip.
 
-- [ ] **25. Dark/light theme toggle**
+- [x] **25. Dark/light theme toggle**
       Currently hardcoded dark mode only. Some users prefer light mode, especially for code review.
 
 ---

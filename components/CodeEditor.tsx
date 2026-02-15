@@ -82,16 +82,16 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
     <div
       className={`flex flex-col h-full rounded-xl overflow-hidden border transition-all duration-300 ${highlight ? 'border-accent-500/50 shadow-[0_0_20px_rgba(245,158,11,0.1)]' : 'border-dark-700'}`}
     >
-      <div className="bg-dark-900/80 px-4 py-2 border-b border-dark-700/80 flex justify-between items-center shrink-0">
+      <div className="bg-slate-900/90 px-4 py-2 border-b border-slate-700/80 flex justify-between items-center shrink-0">
         <div className="flex items-center gap-2">
           {getHeaderIcon()}
-          <span className="text-sm font-semibold text-gray-300">{title}</span>
+          <span className="text-sm font-semibold text-slate-200">{title}</span>
         </div>
-        <span className="text-xs px-2 py-0.5 rounded bg-dark-700 text-gray-400 font-mono uppercase">
+        <span className="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-400 font-mono uppercase">
           {language}
         </span>
       </div>
-      <div className="relative flex-1 bg-dark-800 overflow-y-auto">
+      <div className="relative flex-1 bg-slate-950 overflow-y-auto">
         <Editor
           value={code}
           onValueChange={(code) => !readOnly && onChange?.(code)}
@@ -108,24 +108,24 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
         />
         {!code && !readOnly && (
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <div className="text-dark-600/60 mb-3">
+            <div className="text-slate-600/60 mb-3">
               <span className="font-mono text-3xl font-light tracking-wider">
                 &lt;/&gt;
               </span>
             </div>
-            <span className="text-dark-600 font-mono text-sm">
+            <span className="text-slate-500 font-mono text-sm">
               // Paste your legacy code here...
             </span>
           </div>
         )}
         {!code && readOnly && (
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <div className="text-dark-600/40 mb-3">
+            <div className="text-slate-600/40 mb-3">
               <span className="font-mono text-2xl tracking-wider opacity-60">
                 ▸ _
               </span>
             </div>
-            <span className="text-dark-600 font-mono text-sm">
+            <span className="text-slate-500 font-mono text-sm">
               // Awaiting generation...
             </span>
           </div>

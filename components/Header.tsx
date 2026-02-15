@@ -1,8 +1,13 @@
 import React, { useState } from 'react';
-import { Bot, Terminal, HelpCircle, BookOpen } from 'lucide-react';
+import { Bot, Terminal, HelpCircle, BookOpen, Moon, Sun } from 'lucide-react';
 import InfoModal from './InfoModal';
 
-const Header: React.FC = () => {
+interface HeaderProps {
+  theme: 'dark' | 'light';
+  onToggleTheme: () => void;
+}
+
+const Header: React.FC<HeaderProps> = ({ theme, onToggleTheme }) => {
   const [infoModal, setInfoModal] = useState<'about' | 'how-it-works' | null>(
     null,
   );
@@ -19,7 +24,7 @@ const Header: React.FC = () => {
               </div>
             </div>
             <div>
-              <h1 className="text-xl font-bold font-display bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
+              <h1 className="text-xl font-bold font-display bg-gradient-to-r from-foreground-primary to-foreground-muted bg-clip-text text-transparent">
                 DustOff
               </h1>
               <p className="text-xs text-accent-500/70 font-mono tracking-wider">
@@ -29,10 +34,36 @@ const Header: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-6">
+            <button
+              type="button"
+              onClick={onToggleTheme}
+              className="relative h-10 w-[82px] rounded-full border border-dark-600 bg-dark-800/80 p-1 transition-colors hover:border-accent-500/40 shadow-inner"
+              aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+              title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
+            >
+              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-accent-500/70">
+                <Sun className="w-3.5 h-3.5" />
+              </span>
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-400/70">
+                <Moon className="w-3.5 h-3.5" />
+              </span>
+              <span
+                className={`absolute top-1 h-8 w-8 rounded-full border border-dark-600 bg-dark-900 shadow-[0_6px_16px_rgba(0,0,0,0.22)] transition-transform duration-300 ease-out flex items-center justify-center ${
+                  theme === 'light' ? 'translate-x-[42px]' : 'translate-x-0'
+                }`}
+              >
+                {theme === 'light' ? (
+                  <Sun className="w-4 h-4 text-accent-500" />
+                ) : (
+                  <Moon className="w-4 h-4 text-blue-400" />
+                )}
+              </span>
+            </button>
+
             <nav className="hidden md:flex items-center gap-1 bg-dark-800/50 p-1 rounded-lg border border-dark-700/50">
               <button
                 onClick={() => setInfoModal('about')}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-400 hover:text-accent-400 hover:bg-dark-700 rounded-md transition-all"
+                className="flex items-center gap-2 px-3 py-1.5 text-sm text-foreground-muted hover:text-accent-400 hover:bg-dark-700 rounded-md transition-all"
               >
                 <HelpCircle className="w-4 h-4" />
                 <span>What is this?</span>
@@ -40,7 +71,7 @@ const Header: React.FC = () => {
               <div className="w-px h-4 bg-dark-700"></div>
               <button
                 onClick={() => setInfoModal('how-it-works')}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm text-gray-400 hover:text-accent-400 hover:bg-dark-700 rounded-md transition-all"
+                className="flex items-center gap-2 px-3 py-1.5 text-sm text-foreground-muted hover:text-accent-400 hover:bg-dark-700 rounded-md transition-all"
               >
                 <BookOpen className="w-4 h-4" />
                 <span>How it Works</span>

@@ -212,7 +212,7 @@ const SnippetMigration: React.FC = () => {
         <div className="lg:col-span-1 space-y-6 flex flex-col h-full min-h-0">
           <div className="bg-dark-800 p-5 rounded-xl border border-dark-700 shadow-xl shrink-0 relative overflow-hidden">
             <div className="absolute top-0 right-0 p-3 opacity-10">
-              <Terminal className="w-24 h-24 text-white" />
+              <Terminal className="w-24 h-24 text-foreground-primary" />
             </div>
 
             <h2 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4 flex items-center gap-2">

@@ -50,7 +50,7 @@ const ConfigOption = ({
       className={`w-6 h-6 mb-3 ${selected ? 'text-accent-400' : 'text-gray-500 group-hover:text-gray-400'}`}
     />
     <h3
-      className={`font-semibold mb-1 ${selected ? 'text-white' : 'text-gray-300'}`}
+      className={`font-semibold mb-1 ${selected ? 'text-foreground-primary' : 'text-gray-300'}`}
     >
       {label}
     </h3>
@@ -74,7 +74,7 @@ const MigrationConfigModal: React.FC<MigrationConfigProps> = ({
         {/* Header */}
         <div className="p-6 border-b border-dark-700 flex items-center justify-between bg-dark-800/50">
           <div>
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
+            <h2 className="text-xl font-bold text-foreground-primary flex items-center gap-2">
               <span className="bg-clip-text text-transparent bg-gradient-to-r from-accent-400 to-orange-500 font-display">
                 Configure Stack
               </span>
@@ -184,7 +184,7 @@ const MigrationConfigModal: React.FC<MigrationConfigProps> = ({
         <div className="p-6 border-t border-dark-700 bg-dark-800/50 flex justify-end gap-3 rounded-b-2xl">
           <button
             onClick={onCancel}
-            className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-white transition-colors"
+            className="px-4 py-2 text-sm font-medium text-gray-400 hover:text-foreground-primary transition-colors"
           >
             Cancel
           </button>
