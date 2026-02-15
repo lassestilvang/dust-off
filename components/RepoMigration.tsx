@@ -43,10 +43,8 @@ import {
   Loader2,
   GitBranch,
   Database,
-  Check,
   Layout,
   RotateCw,
-  TestTube,
   Maximize2,
   X,
   Code2,
@@ -703,6 +701,11 @@ const RepoMigration: React.FC = () => {
               <Github className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-5 h-5" />
               <input
                 type="text"
+                name="repo-url"
+                id="repo-url"
+                autoComplete="off"
+                data-1p-ignore
+                data-lpignore="true"
                 value={state.url}
                 onChange={(e) =>
                   setState((prev) => ({ ...prev, url: e.target.value }))
@@ -734,10 +737,11 @@ const RepoMigration: React.FC = () => {
                 disabled={isBusy || !state.url}
                 className={`
                         flex items-center justify-center gap-2 py-2 px-4 rounded-lg font-bold text-sm transition-all whitespace-nowrap w-full md:w-auto
-                        ${!isAnalyzed && state.url
-                    ? 'bg-accent-600 hover:bg-accent-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.3)]'
-                    : 'bg-dark-700 hover:bg-dark-600 text-gray-300 border border-dark-600'
-                  }
+                        ${
+                          !isAnalyzed && state.url
+                            ? 'bg-accent-600 hover:bg-accent-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.3)]'
+                            : 'bg-dark-700 hover:bg-dark-600 text-gray-300 border border-dark-600'
+                        }
                         ${state.status === AgentStatus.ANALYZING || !state.url ? 'opacity-70 cursor-not-allowed' : ''}
                         `}
               >
@@ -787,10 +791,11 @@ const RepoMigration: React.FC = () => {
                   }
                   className={`
                             flex items-center justify-center gap-2 py-2 px-6 rounded-lg font-bold text-sm transition-all whitespace-nowrap w-full md:w-auto
-                            ${isAnalyzed
-                      ? 'bg-accent-600 hover:bg-accent-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.3)] animate-in fade-in zoom-in-95'
-                      : 'bg-dark-800 text-gray-600 cursor-not-allowed border border-dark-700'
-                    }
+                            ${
+                              isAnalyzed
+                                ? 'bg-accent-600 hover:bg-accent-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.3)] animate-in fade-in zoom-in-95'
+                                : 'bg-dark-800 text-gray-600 cursor-not-allowed border border-dark-700'
+                            }
                             `}
                 >
                   {state.status === AgentStatus.CONVERTING ? (
@@ -814,7 +819,6 @@ const RepoMigration: React.FC = () => {
                   onCancel={() => setShowConfigModal(false)}
                 />
               )}
-
             </div>
 
             {/* Status Badge */}
@@ -893,7 +897,7 @@ const RepoMigration: React.FC = () => {
                 ) : (
                   <div className="w-48 h-28 bg-dark-900 rounded-lg border border-dark-600 border-dashed flex flex-col items-center justify-center text-gray-500 gap-2">
                     {state.status === AgentStatus.ANALYZING ||
-                      state.status === AgentStatus.PLANNING ? (
+                    state.status === AgentStatus.PLANNING ? (
                       <>
                         <Loader2 className="w-5 h-5 animate-spin text-accent-500" />
                         <span className="text-xs">Generating Diagram...</span>

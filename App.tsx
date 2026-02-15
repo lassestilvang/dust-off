@@ -64,8 +64,21 @@ const App: React.FC = () => {
 
           <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-4 bg-dark-800/40 p-4">
             <div className="text-left flex-1">
+
+              <h2 className="text-lg font-bold tracking-tight flex items-center gap-2 font-display">
+                <span className="text-white">Dust off your legacy code.</span>
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent-400 to-accent-600">
+                  Ship modern.
+                </span>
+              </h2>
+              <p className="text-gray-400 text-xs flex items-center gap-1.5 mt-1">
+                <Sparkles className="w-3 h-3 text-accent-400" />
+                Autonomous refactoring from legacy frameworks to modern
+                architecture that Coding LLMs love.
+              </p>
+
               {/* Visual Metaphor: Old → New */}
-              <div className="flex items-center gap-3 mb-2">
+              <div className="flex items-center gap-3 mt-3">
                 <span
                   className="font-mono text-[11px] text-gray-600 line-through opacity-60"
                   style={{ filter: 'sepia(0.8) brightness(0.7)' }}
@@ -81,18 +94,6 @@ const App: React.FC = () => {
                   {'>'} ✨
                 </span>
               </div>
-
-              <h2 className="text-lg font-bold tracking-tight flex items-center gap-2 font-display">
-                <span className="text-white">Dust off your legacy code.</span>
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent-400 to-accent-600">
-                  Ship modern.
-                </span>
-              </h2>
-              <p className="text-gray-400 text-xs flex items-center gap-1.5 mt-1">
-                <Sparkles className="w-3 h-3 text-accent-400" />
-                Autonomous refactoring from legacy frameworks to modern
-                architecture that Coding LLMs love.
-              </p>
             </div>
 
             {/* Mode Switcher with Sliding Indicator */}
