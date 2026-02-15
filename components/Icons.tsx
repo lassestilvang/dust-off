@@ -6,6 +6,8 @@ import {
   siPython,
   siVuedotjs,
   siPhp,
+  siTypescript,
+  siJavascript,
 } from 'simple-icons';
 
 // Helper component to render Simple Icons
@@ -25,6 +27,14 @@ const SimpleIcon = ({
     <title>{icon.title}</title>
     <path d={icon.path} />
   </svg>
+);
+
+export const TypeScriptIcon = ({ className }: { className?: string }) => (
+  <SimpleIcon icon={siTypescript} className={className} />
+);
+
+export const JavaScriptIcon = ({ className }: { className?: string }) => (
+  <SimpleIcon icon={siJavascript} className={className} />
 );
 
 export const ReactIcon = ({ className }: { className?: string }) => (

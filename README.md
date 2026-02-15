@@ -22,6 +22,16 @@ _Coming soon_
 - **Visualization**: Mermaid.js (via Gemini)
 - **State Management**: React Context / Hooks
 
+## Testing 🧪
+
+Run the test suite with:
+
+```bash
+bun run test
+```
+
+This project uses **Vitest** for unit and component testing.
+
 ## Getting Started
 
 ### Prerequisites
