@@ -22,6 +22,7 @@
 - Completed: #23 Mobile responsiveness improvements
 - Completed: #24 Copy-to-clipboard for generated code
 - Completed: #25 Dark/light theme toggle
+- Completed: #26 Expanded test coverage for core migration UI flows
 
 ## 🏗️ ARCHITECTURE & CODE QUALITY
 
@@ -135,13 +136,12 @@
 
 ## 🧪 TESTING
 
-- [ ] **26. Test coverage is minimal**
-      Only basic tests exist for `CodeEditor`, `FileExplorer`, `StepIndicator`, `githubService`, `geminiService`, `dependencyGraph`, and `constants`. Missing:
-  - `RepoMigration` integration tests (the core flow!)
-  - `SnippetMigration` tests
-  - `MigrationConfig` tests
-  - `MigrationReportModal` tests
-  - E2E tests with mocked Gemini responses
+- [x] **26. Test coverage expansion for core UI flows**
+      Added coverage for:
+  - `RepoMigration` integration flow tests
+  - `SnippetMigration` workflow tests
+  - `MigrationConfig` interaction tests
+  - `MigrationReportModal` rendering/action tests
 
 - [ ] **27. No integration/E2E testing**
       Add Playwright or Cypress for full flow testing with mocked API responses.
