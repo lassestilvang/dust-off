@@ -231,7 +231,7 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
             )}
           </div>
         ) : (
-          <div className="cascade-in">
+          <div className="cascade-in" key={files.map((f) => f.path).join(',')}>
             {files.map((node) => (
               <FileItem
                 key={node.path}
