@@ -16,6 +16,12 @@ export interface AnalysisResult {
   risks: string[];
 }
 
+export interface MigrationConfig {
+  uiFramework: 'tailwind' | 'shadcn';
+  stateManagement: 'context' | 'zustand' | 'redux';
+  testingLibrary: 'vitest' | 'jest';
+}
+
 export interface RepoAnalysisResult extends AnalysisResult {
   detectedFramework: string;
   recommendedTarget: string;

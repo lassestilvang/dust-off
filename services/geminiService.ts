@@ -11,6 +11,7 @@ import {
   AnalysisResult,
   VerificationResult,
   RepoAnalysisResult,
+  MigrationConfig,
 } from '../types';
 
 // Helper to get safe API key
@@ -127,6 +128,7 @@ export const analyzeRepository = async (
 
 export const generateProjectStructure = async (
   analysisSummary: string,
+  config: MigrationConfig,
   includeTests: boolean = false,
 ): Promise<string[]> => {
   const client = createClient();
@@ -134,10 +136,14 @@ export const generateProjectStructure = async (
     ? 'Include comprehensive test files (e.g., __tests__/*.test.tsx, *.spec.ts) for main components and utilities using Vitest/React Testing Library.'
     : 'Do not include any test files or test configuration.';
 
+  const userConfigStr = JSON.stringify(config, null, 2);
+
   const prompt = PROJECT_SCAFFOLD_PROMPT.replace(
     '{analysisSummary}',
     analysisSummary,
-  ).replace('{testRequirement}', testReq);
+  )
+    .replace('{testRequirement}', testReq)
+    .replace('{userConfig}', userConfigStr);
 
   try {
     const response = await withRetry<GenerateContentResponse>(() =>
@@ -162,18 +168,31 @@ export const generateProjectStructure = async (
 export const generateNextJsFile = async (
   targetFilePath: string,
   sourceContext: string,
+  relatedFilesContext: string,
+  config: MigrationConfig,
 ): Promise<string> => {
   const client = createClient();
-  // Truncate sourceContext if too large (approx safety check)
+  // Truncate sourceContext if too large (approx safety check) - increased to 500k for Gemini 1.5 Pro
   const safeContext =
-    sourceContext.length > 50000
-      ? sourceContext.substring(0, 50000) + '\n...[truncated]'
+    sourceContext.length > 500000
+      ? sourceContext.substring(0, 500000) + '\n...[truncated]'
       : sourceContext;
+
+  // Truncate related context if needed, leaving room for source
+  const safeRelated =
+    relatedFilesContext.length > 200000
+      ? relatedFilesContext.substring(0, 200000) + '\n...[truncated]'
+      : relatedFilesContext;
+
+  const userConfigStr = JSON.stringify(config, null, 2);
 
   const prompt = GENERATION_PROMPT_TEMPLATE.replace(
     '{targetFilePath}',
     targetFilePath,
-  ).replace('{sourceContext}', safeContext);
+  )
+    .replace('{sourceContext}', safeContext)
+    .replace('{relatedFilesContext}', safeRelated)
+    .replace('{userConfig}', userConfigStr);
 
   try {
     const response = await withRetry<GenerateContentResponse>(() =>

@@ -26,10 +26,15 @@ import {
   generateProjectStructure,
   generateNextJsFile,
 } from '../services/geminiService';
+import {
+  buildDependencyGraph,
+  getRelatedFiles,
+} from '../services/dependencyGraph';
 import AgentLogs from './AgentLogs';
 import FileExplorer from './FileExplorer';
 import CodeEditor from './CodeEditor';
 import MigrationReportModal from './MigrationReportModal';
+import MigrationConfigModal from './MigrationConfig';
 import {
   Github,
   Play,
@@ -207,11 +212,17 @@ const RepoMigration: React.FC = () => {
     targetLang: 'Next.js + TypeScript',
     sourceContext: '',
     report: null,
+    config: {
+      uiFramework: 'tailwind',
+      stateManagement: 'context',
+      testingLibrary: 'vitest',
+    },
   });
 
   const [includeTests, setIncludeTests] = useState(false);
   const [isDiagramOpen, setIsDiagramOpen] = useState(false);
   const [showReport, setShowReport] = useState(false);
+  const [showConfigModal, setShowConfigModal] = useState(false);
 
   const addLog = (message: string, type: LogEntry['type'] = 'info') => {
     setState((prev) => ({
@@ -392,42 +403,77 @@ const RepoMigration: React.FC = () => {
     }
   };
 
-  const confirmMigration = async () => {
-    if (!state.analysis) return;
+  const handleConfigConfirm = () => {
+    setShowConfigModal(false);
+    startMigration();
+  };
+
+  const startMigration = async () => {
+    if (!state.analysis || !state.config) return;
 
     setState((prev) => ({ ...prev, status: AgentStatus.CONVERTING }));
 
-    // 4. Ingest Source Code for Context
-    addLog('Ingesting key legacy source files for context...', 'info');
-    const filesToRead = flattenFiles(state.files)
-      .filter(
-        (f) =>
-          f.type === 'file' &&
-          !f.name.endsWith('.md') &&
-          !f.name.endsWith('.json') &&
-          !isImageFile(f.name),
-      )
-      .slice(0, 15); // Limit for demo speed/context size
+    // 4. Ingest Source Code for Context (Smart Context)
+    addLog('Ingesting key legacy source files for context (Max 50)...', 'info');
+
+    // Filter generic files
+    const candidateFiles = flattenFiles(state.files).filter(
+      (f) =>
+        f.type === 'file' &&
+        !f.name.endsWith('.md') &&
+        !f.name.endsWith('.json') &&
+        !f.name.endsWith('.lock') &&
+        !isImageFile(f.name),
+    );
+
+    // Take top 50 files for broader context (Gemini 1.5 Pro can handle it)
+    const filesToRead = candidateFiles.slice(0, 50);
 
     let context = '';
+    const fileContents: Record<string, string> = {};
+
     for (const f of filesToRead) {
       try {
         const content = await fetchFileContent(state.url, f.path);
         context += `\n\n--- FILE: ${f.path} ---\n${content}`;
+        fileContents[f.path] = content;
+
+        // Update local file tree with content so checkmarks appear?
+        // No, keep that separate or we get too many updates.
+        // But we DO need to put it in state for the Graph builder to work?
+        // Actually buildDependencyGraph takes FileNode[], so we should populate their content.
+        f.content = content;
       } catch (_e) {
         console.warn(`Failed to read ${f.path}`);
       }
     }
     setState((prev) => ({ ...prev, sourceContext: context }));
-    addLog(`Context loaded: ${context.length} chars.`, 'success');
+    addLog(
+      `Smart Context loaded: ${context.length} chars from ${filesToRead.length} files.`,
+      'success',
+    );
+
+    // Build Dependency Graph from the files we read
+    addLog('Building Dependency Graph...', 'info');
+    // We need to create a list of FileNodes that HAVE content
+    const filesWithContent = filesToRead.map((f) => ({
+      ...f,
+      content: fileContents[f.path],
+    }));
+    const graph = buildDependencyGraph(filesWithContent);
+    addLog(
+      `Dependency Graph built with ${Object.keys(graph).length} nodes.`,
+      'success',
+    );
 
     // 5. Generate New Project Structure
     addLog(
-      `Designing Next.js 16.1 App Router project structure${includeTests ? ' with tests' : ''}...`,
+      `Designing Next.js 16.1 App Router project structure (${state.config.uiFramework}, ${state.config.stateManagement})...`,
       'info',
     );
     const newFilePaths = await generateProjectStructure(
       state.analysis.summary,
+      state.config,
       includeTests,
     );
 
@@ -456,7 +502,36 @@ const RepoMigration: React.FC = () => {
       addLog(`Generating ${file.path}...`, 'info');
 
       try {
-        const content = await generateNextJsFile(file.path, context);
+        // Try to find a matching source file to get specific related context
+        // E.g. apps/web/components/Header.tsx -> search for "Header" in source files
+        const targetNameNoExt = file.name.split('.')[0];
+        let relatedContext = '';
+
+        // Find source file that matches name
+        const matchingSource = filesToRead.find((f) => {
+          const sourceNameNoExt = f.name.split('.')[0];
+          return (
+            sourceNameNoExt.toLowerCase() === targetNameNoExt.toLowerCase()
+          );
+        });
+
+        if (matchingSource) {
+          const deps = getRelatedFiles(matchingSource.path, graph, 5);
+          if (deps.length > 0) {
+            relatedContext = deps
+              .map((depPath) => {
+                return `\n\n--- RELATED FILE: ${depPath} ---\n${fileContents[depPath] || ''}`;
+              })
+              .join('\n');
+          }
+        }
+
+        const content = await generateNextJsFile(
+          file.path,
+          context,
+          relatedContext,
+          state.config,
+        );
         updateFileContent(file.path, content, 'target');
         updateFileStatus(file.path, 'done', 'target');
       } catch (_e) {
@@ -708,7 +783,7 @@ const RepoMigration: React.FC = () => {
                 </>
               ) : (
                 <button
-                  onClick={confirmMigration}
+                  onClick={() => setShowConfigModal(true)}
                   disabled={
                     !isAnalyzed || state.status === AgentStatus.CONVERTING
                   }
@@ -728,8 +803,19 @@ const RepoMigration: React.FC = () => {
                   )}
                   {state.status === AgentStatus.CONVERTING
                     ? 'Building Project...'
-                    : 'Build Next.js App'}
+                    : 'Configure & Build'}
                 </button>
+              )}
+              {/* Migration Config Modal */}
+              {showConfigModal && state.config && (
+                <MigrationConfigModal
+                  config={state.config}
+                  onChange={(newConfig) =>
+                    setState((prev) => ({ ...prev, config: newConfig }))
+                  }
+                  onConfirm={handleConfigConfirm}
+                  onCancel={() => setShowConfigModal(false)}
+                />
               )}
 
               <label

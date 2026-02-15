@@ -70,6 +70,9 @@ Legacy Application Context:
 Test Suite Requirement:
 {testRequirement}
 
+User Configuration:
+{userConfig}
+
 Task:
 Design a clean, production-ready file structure for the new Next.js application.
 Include standard files like \`package.json\`, \`tsconfig.json\`, \`app/layout.tsx\`, \`app/page.tsx\`, and any necessary components or lib utilities based on the likely needs of the legacy app.
@@ -85,14 +88,23 @@ Your task is to generate the code for a specific file in a new Next.js 16.1 (App
 
 Target File Path: {targetFilePath}
 
+User Configuration:
+{userConfig}
+
 Legacy Code Context (Reference):
 {sourceContext}
 
+Related Files Context (Definitions/Exports from dependencies):
+{relatedFilesContext}
+
 Instructions:
 1. Generate the full code for \`{targetFilePath}\`.
-2. Use TypeScript, functional components, and Tailwind CSS.
-3. Ensure it implements functionality equivalent to the legacy code where applicable, or sets up necessary boilerplate (e.g., config files).
-4. If the file is \`package.json\`, include dependencies relevant to the project (e.g., lucide-react, clsx, tailwind-merge) and ensure "next": "^16.1.0" or later.
+2. Follow the User Configuration strictly (e.g., use the selected State Management library).
+3. Use TypeScript, functional components, and the selected UI Framework.
+4. Ensure it implements functionality equivalent to the legacy code where applicable.
+5. If the file is \`package.json\`, include dependencies relevant to the project and the User Configuration.
+6. validation: Add Zod schema validation for any data inputs if applicable.
+7. Error Handling: Add try/catch blocks and proper error states.
 
 Output ONLY the code content. Do not use markdown blocks.
 `;
