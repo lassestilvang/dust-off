@@ -24,5 +24,16 @@ export default defineConfig(({ mode }) => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'react-vendor': ['react', 'react-dom'],
+            'genai': ['@google/genai'],
+            'lucide': ['lucide-react'],
+          },
+        },
+      },
+    },
   };
 });
