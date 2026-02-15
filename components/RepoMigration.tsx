@@ -214,7 +214,9 @@ const RepoMigration: React.FC = () => {
                 <button
                   onClick={() => setShowConfigModal(true)}
                   disabled={
-                    !isAnalyzed || state.status === AgentStatus.CONVERTING
+                    !isAnalyzed ||
+                    state.status === AgentStatus.CONVERTING ||
+                    state.status === AgentStatus.VERIFYING
                   }
                   className={`
                             flex items-center justify-center gap-2 py-2 px-6 rounded-lg font-bold text-sm transition-all whitespace-nowrap w-full md:w-auto
@@ -225,14 +227,17 @@ const RepoMigration: React.FC = () => {
                             }
                             `}
                 >
-                  {state.status === AgentStatus.CONVERTING ? (
+                  {state.status === AgentStatus.CONVERTING ||
+                  state.status === AgentStatus.VERIFYING ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
                     <GitBranch className="w-4 h-4" />
                   )}
                   {state.status === AgentStatus.CONVERTING
                     ? 'Building Project...'
-                    : 'Configure & Build'}
+                    : state.status === AgentStatus.VERIFYING
+                      ? 'Verifying Output...'
+                      : 'Configure & Build'}
                 </button>
               )}
               {isBusy && (

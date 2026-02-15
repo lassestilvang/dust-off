@@ -24,6 +24,7 @@ import {
   runAnalyzePhase,
   runGeneratePhase,
   runScaffoldPhase,
+  runVerificationPhase,
 } from '../services/migrationOrchestrator';
 import { useMigrationLogs } from './useMigrationLogs';
 import { isAbortError } from '../services/abortUtils';
@@ -395,6 +396,7 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
 
       await runGeneratePhase({
         generatedFiles: scaffoldResult.generatedFiles,
+        analysis: currentState.analysis,
         sourceContext: scaffoldResult.sourceContext,
         fileContents: scaffoldResult.fileContents,
         filesToRead: scaffoldResult.filesToRead,
@@ -432,6 +434,33 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
           });
         },
       });
+
+      dispatch({ type: 'set_status', payload: AgentStatus.VERIFYING });
+
+      const verificationResult = await runVerificationPhase({
+        generatedFiles: scaffoldResult.generatedFiles,
+        analysis: currentState.analysis,
+        addLog,
+        abortSignal: controller.signal,
+        onFileFixed: (path, content) => {
+          dispatch({
+            type: 'update_file_content',
+            payload: { path, content, tree: 'target' },
+          });
+          dispatch({
+            type: 'update_file_status',
+            payload: { path, status: 'done', tree: 'target' },
+          });
+        },
+      });
+
+      if (!verificationResult.passed) {
+        addLog(
+          `Verification reported ${verificationResult.issues.length} issue(s). Review recommended before shipping.`,
+          'warning',
+          AgentStatus.VERIFYING,
+        );
+      }
 
       const endTime = Date.now();
       const report = generateReport(
@@ -577,7 +606,8 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
 
   const isBusy =
     state.status === AgentStatus.ANALYZING ||
-    state.status === AgentStatus.CONVERTING;
+    state.status === AgentStatus.CONVERTING ||
+    state.status === AgentStatus.VERIFYING;
 
   return {
     state,

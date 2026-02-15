@@ -8,6 +8,10 @@
 - Completed: #4 Migrated large `RepoState` updates to typed `useReducer`
 - Completed: #6 Cancellation support
 - Completed: #7 Streaming/progressive file generation
+- Completed: #12 Multi-pass verification for repo mode
+- Completed: #13 Topological file generation ordering
+- Completed: #14 Semantic cross-file context injection
+- Completed: #15 Prompt engineering improvements
 
 ## 🏗️ ARCHITECTURE & CODE QUALITY
 
@@ -60,16 +64,16 @@
 
 ## 🧠 AI QUALITY
 
-- [ ] **12. Multi-pass verification for repo mode**
+- [x] **12. Multi-pass verification for repo mode**
   Snippet mode has analyze→convert→verify. Repo mode skips verification entirely — it generates files but never verifies them. Add a post-generation verification pass that checks cross-file consistency (imports exist, types match).
 
-- [ ] **13. Smarter file generation ordering via dependency graph**
+- [x] **13. Smarter file generation ordering via dependency graph**
   Files are generated in alphabetical order, but foundational files (types, utils, configs) should be generated FIRST so their content can be injected as `relatedFilesContext` for dependent files. Use the dependency graph topologically.
 
-- [ ] **14. Cross-file context injection is weak**
+- [x] **14. Cross-file context injection is weak**
   `getRelatedFiles()` does a simple name match (`Header.tsx` source → `Header.tsx` target). This misses cases where source files are reorganized. Use semantic matching from the analysis, not just filename matching.
 
-- [ ] **15. Prompt engineering improvements**
+- [x] **15. Prompt engineering improvements**
   - Add few-shot examples in prompts for better JSON reliability
   - The `GENERATION_PROMPT_TEMPLATE` should specify the exact Next.js App Router conventions (when to use `'use client'`, server components, route handlers)
   - Add a `SYSTEM` message role for the model identity/instructions

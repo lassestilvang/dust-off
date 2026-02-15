@@ -26,12 +26,28 @@ export interface RepoAnalysisResult extends AnalysisResult {
   detectedFramework: string;
   recommendedTarget: string;
   architectureDescription: string;
+  semanticFileMappings: {
+    sourcePath: string;
+    targetPath: string;
+    rationale: string;
+    confidence: number; // 0..1
+  }[];
+  migrationNotes: string[];
 }
 
 export interface VerificationResult {
   passed: boolean;
   issues: string[];
   fixedCode?: string;
+}
+
+export interface RepoVerificationResult {
+  passed: boolean;
+  issues: string[];
+  fixedFiles: {
+    path: string;
+    content: string;
+  }[];
 }
 
 export interface LogEntry {

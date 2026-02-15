@@ -1,21 +1,27 @@
 import { GoogleGenAI, GenerateContentResponse } from '@google/genai';
 import {
   ANALYSIS_PROMPT_TEMPLATE,
+  ANALYSIS_SYSTEM_INSTRUCTION,
   CONVERSION_PROMPT_TEMPLATE,
-  VERIFICATION_PROMPT_TEMPLATE,
-  REPO_ANALYSIS_PROMPT_TEMPLATE,
-  PROJECT_SCAFFOLD_PROMPT,
   GENERATION_PROMPT_TEMPLATE,
+  GENERATION_SYSTEM_INSTRUCTION,
+  PROJECT_SCAFFOLD_PROMPT,
+  REPO_ANALYSIS_PROMPT_TEMPLATE,
+  REPO_ANALYSIS_SYSTEM_INSTRUCTION,
+  REPO_VERIFICATION_PROMPT_TEMPLATE,
+  SCAFFOLD_SYSTEM_INSTRUCTION,
+  VERIFICATION_PROMPT_TEMPLATE,
+  VERIFICATION_SYSTEM_INSTRUCTION,
 } from '../constants';
 import {
   AnalysisResult,
-  VerificationResult,
-  RepoAnalysisResult,
   MigrationConfig,
+  RepoAnalysisResult,
+  RepoVerificationResult,
+  VerificationResult,
 } from '../types';
 import { abortIfSignaled, isAbortError } from './abortUtils';
 
-// Helper to get safe API key
 const getApiKey = () => process.env.API_KEY || '';
 
 const createClient = () => new GoogleGenAI({ apiKey: getApiKey() });
@@ -50,7 +56,6 @@ const sleep = async (ms: number, signal?: AbortSignal): Promise<void> => {
   });
 };
 
-// Helper: Exponential Backoff Retry for 503 Errors
 const withRetry = async <T>(
   fn: () => Promise<T>,
   options?: { retries?: number; baseDelay?: number; abortSignal?: AbortSignal },
@@ -67,7 +72,6 @@ const withRetry = async <T>(
       throw error;
     }
 
-    // Check for 503 or overload messages
     const geminiError = error as { status?: number; message?: string };
     const isOverloaded =
       geminiError.status === 503 ||
@@ -80,7 +84,6 @@ const withRetry = async <T>(
       console.warn(
         `Gemini API overloaded (503). Retrying operation... attempts left: ${retries}`,
       );
-      // Wait for baseDelay * (2 ^ (3 - retries)) -- Simple exponential: 2s, 4s, 8s
       await sleep(baseDelay, abortSignal);
       return withRetry(fn, {
         retries: retries - 1,
@@ -88,7 +91,88 @@ const withRetry = async <T>(
         abortSignal,
       });
     }
+
     throw error;
+  }
+};
+
+const normalizeRepoAnalysis = (
+  payload: Partial<RepoAnalysisResult> | null | undefined,
+): RepoAnalysisResult => {
+  const semanticFileMappings = Array.isArray(payload?.semanticFileMappings)
+    ? payload.semanticFileMappings
+        .map((entry) => ({
+          sourcePath:
+            typeof entry?.sourcePath === 'string' ? entry.sourcePath : '',
+          targetPath:
+            typeof entry?.targetPath === 'string' ? entry.targetPath : '',
+          rationale:
+            typeof entry?.rationale === 'string' ? entry.rationale : '',
+          confidence:
+            typeof entry?.confidence === 'number'
+              ? Math.max(0, Math.min(1, entry.confidence))
+              : 0.5,
+        }))
+        .filter((entry) => entry.sourcePath && entry.targetPath)
+    : [];
+
+  const migrationNotes = Array.isArray(payload?.migrationNotes)
+    ? payload!.migrationNotes.filter(
+        (item): item is string => typeof item === 'string',
+      )
+    : [];
+
+  return {
+    summary:
+      typeof payload?.summary === 'string' && payload.summary.trim()
+        ? payload.summary
+        : 'Could not analyze repository structure automatically.',
+    complexity:
+      payload?.complexity === 'Low' ||
+      payload?.complexity === 'Medium' ||
+      payload?.complexity === 'High'
+        ? payload.complexity
+        : 'High',
+    dependencies: Array.isArray(payload?.dependencies)
+      ? payload!.dependencies.filter(
+          (item): item is string => typeof item === 'string',
+        )
+      : [],
+    patterns: Array.isArray(payload?.patterns)
+      ? payload!.patterns.filter(
+          (item): item is string => typeof item === 'string',
+        )
+      : [],
+    risks: Array.isArray(payload?.risks)
+      ? payload!.risks.filter(
+          (item): item is string => typeof item === 'string',
+        )
+      : ['API Error'],
+    detectedFramework:
+      typeof payload?.detectedFramework === 'string' &&
+      payload.detectedFramework.trim()
+        ? payload.detectedFramework
+        : 'Unknown',
+    recommendedTarget:
+      typeof payload?.recommendedTarget === 'string' &&
+      payload.recommendedTarget.trim()
+        ? payload.recommendedTarget
+        : 'Next.js + TypeScript',
+    architectureDescription:
+      typeof payload?.architectureDescription === 'string' &&
+      payload.architectureDescription.trim()
+        ? payload.architectureDescription
+        : 'A generic software architecture diagram.',
+    semanticFileMappings,
+    migrationNotes,
+  };
+};
+
+const safeParseJson = <T>(text: string, fallback: T): T => {
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return fallback;
   }
 };
 
@@ -113,6 +197,7 @@ export const analyzeCode = async (
           contents: prompt + '\n\nSource Code:\n' + sourceCode,
           config: {
             abortSignal,
+            systemInstruction: ANALYSIS_SYSTEM_INSTRUCTION,
             responseMimeType: 'application/json',
             thinkingConfig: { thinkingBudget: 1024 },
           },
@@ -120,8 +205,13 @@ export const analyzeCode = async (
       { abortSignal },
     );
 
-    const text = response.text || '{}';
-    return JSON.parse(text) as AnalysisResult;
+    return safeParseJson(response.text || '{}', {
+      summary: 'Failed to generate analysis due to API error or parsing issue.',
+      complexity: 'Medium',
+      dependencies: [],
+      patterns: [],
+      risks: ['API Error / Parsing Failed'],
+    } satisfies AnalysisResult);
   } catch (e) {
     if (isAbortError(e)) {
       throw e;
@@ -157,6 +247,7 @@ export const analyzeRepository = async (
           contents: prompt,
           config: {
             abortSignal,
+            systemInstruction: REPO_ANALYSIS_SYSTEM_INSTRUCTION,
             responseMimeType: 'application/json',
             thinkingConfig: { thinkingBudget: 2048 },
           },
@@ -164,24 +255,17 @@ export const analyzeRepository = async (
       { abortSignal },
     );
 
-    const text = response.text || '{}';
-    return JSON.parse(text) as RepoAnalysisResult;
+    const parsed = safeParseJson<Partial<RepoAnalysisResult>>(
+      response.text || '{}',
+      {},
+    );
+    return normalizeRepoAnalysis(parsed);
   } catch (e) {
     if (isAbortError(e)) {
       throw e;
     }
     console.error('Failed to parse repo analysis JSON', e);
-    // Fallback
-    return {
-      summary: 'Could not analyze repository structure automatically.',
-      complexity: 'High',
-      dependencies: [],
-      patterns: [],
-      risks: ['API Error'],
-      detectedFramework: 'Unknown',
-      recommendedTarget: 'Next.js + TypeScript',
-      architectureDescription: 'A generic software architecture diagram.',
-    };
+    return normalizeRepoAnalysis(undefined);
   }
 };
 
@@ -214,6 +298,7 @@ export const generateProjectStructure = async (
           contents: prompt,
           config: {
             abortSignal,
+            systemInstruction: SCAFFOLD_SYSTEM_INSTRUCTION,
             responseMimeType: 'application/json',
             thinkingConfig: { thinkingBudget: 1024 },
           },
@@ -221,14 +306,18 @@ export const generateProjectStructure = async (
       { abortSignal },
     );
 
-    const text = response.text || '[]';
-    return JSON.parse(text) as string[];
+    const parsed = safeParseJson<unknown>(response.text || '[]', []);
+    if (!Array.isArray(parsed)) {
+      return ['package.json', 'app/page.tsx', 'app/layout.tsx', 'README.md'];
+    }
+
+    return parsed.filter((item): item is string => typeof item === 'string');
   } catch (e) {
     if (isAbortError(e)) {
       throw e;
     }
     console.error('Failed to parse scaffold JSON', e);
-    return ['package.json', 'app/page.tsx', 'app/layout.tsx', 'README.md']; // Fallback
+    return ['package.json', 'app/page.tsx', 'app/layout.tsx', 'README.md'];
   }
 };
 
@@ -241,13 +330,11 @@ export const generateNextJsFile = async (
 ): Promise<string> => {
   const client = createClient();
   const abortSignal = options?.abortSignal;
-  // Truncate sourceContext if too large (approx safety check) - increased to 500k for Gemini 1.5 Pro
   const safeContext =
     sourceContext.length > 500000
       ? sourceContext.substring(0, 500000) + '\n...[truncated]'
       : sourceContext;
 
-  // Truncate related context if needed, leaving room for source
   const safeRelated =
     relatedFilesContext.length > 200000
       ? relatedFilesContext.substring(0, 200000) + '\n...[truncated]'
@@ -271,6 +358,7 @@ export const generateNextJsFile = async (
           contents: prompt,
           config: {
             abortSignal,
+            systemInstruction: GENERATION_SYSTEM_INSTRUCTION,
             thinkingConfig: { thinkingBudget: 2048 },
           },
         }),
@@ -283,7 +371,7 @@ export const generateNextJsFile = async (
       throw e;
     }
     console.error(`Failed to generate file ${targetFilePath}`, e);
-    throw e; // Rethrow to be handled by caller UI
+    throw e;
   }
 };
 
@@ -326,6 +414,7 @@ export const generateNextJsFileStream = async (
           contents: prompt,
           config: {
             abortSignal,
+            systemInstruction: GENERATION_SYSTEM_INSTRUCTION,
             thinkingConfig: { thinkingBudget: 2048 },
           },
         }),
@@ -361,7 +450,6 @@ export const generateArchitectureDiagram = async (
 ): Promise<string> => {
   const client = createClient();
   const abortSignal = options?.abortSignal;
-  // Using gemini-3-pro-image-preview for high quality diagrams
   const prompt = `Create a professional, high-level software architecture diagram.
   Style: Whiteboard, technical, clean lines, blue and white color scheme.
   System Description: ${description}`;
@@ -376,6 +464,7 @@ export const generateArchitectureDiagram = async (
           },
           config: {
             abortSignal,
+            systemInstruction: REPO_ANALYSIS_SYSTEM_INSTRUCTION,
             imageConfig: {
               aspectRatio: '16:9',
               imageSize: '1K',
@@ -385,7 +474,6 @@ export const generateArchitectureDiagram = async (
       { abortSignal },
     );
 
-    // Extract image
     for (const part of response.candidates?.[0]?.content?.parts || []) {
       if (part.inlineData) {
         return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
@@ -423,6 +511,7 @@ export const convertCode = async (
           contents: prompt,
           config: {
             abortSignal,
+            systemInstruction: GENERATION_SYSTEM_INSTRUCTION,
             thinkingConfig: { thinkingBudget: 2048 },
           },
         }),
@@ -462,6 +551,7 @@ export const verifyCode = async (
           contents: prompt,
           config: {
             abortSignal,
+            systemInstruction: VERIFICATION_SYSTEM_INSTRUCTION,
             responseMimeType: 'application/json',
             thinkingConfig: { thinkingBudget: 1024 },
           },
@@ -469,22 +559,121 @@ export const verifyCode = async (
       { abortSignal },
     );
 
-    const text = response.text || '{}';
-    try {
-      const result = JSON.parse(text);
-      return {
-        passed: result.passed,
-        issues: result.issues || [],
-        fixedCode: result.fixedCode,
-      };
-    } catch (_parseError) {
-      return { passed: true, issues: ['Verification parsing failed'] };
-    }
+    const result = safeParseJson<{
+      passed?: boolean;
+      issues?: string[];
+      fixedCode?: string;
+    }>(response.text || '{}', {});
+
+    return {
+      passed: Boolean(result.passed),
+      issues: Array.isArray(result.issues)
+        ? result.issues.filter(
+            (item): item is string => typeof item === 'string',
+          )
+        : [],
+      fixedCode:
+        typeof result.fixedCode === 'string' ? result.fixedCode : undefined,
+    };
   } catch (e) {
     if (isAbortError(e)) {
       throw e;
     }
     console.error('Failed to verify code', e);
     return { passed: true, issues: ['Verification failed due to API Error'] };
+  }
+};
+
+export const verifyRepositoryFiles = async (
+  generatedFiles: Array<{ path: string; content: string }>,
+  analysisSummary: string,
+  issuesFromStaticChecks: string[],
+  passNumber: number,
+  options?: GeminiRequestOptions,
+): Promise<RepoVerificationResult> => {
+  const client = createClient();
+  const abortSignal = options?.abortSignal;
+  const existingPaths = new Set(generatedFiles.map((file) => file.path));
+
+  const compactFilesPayload = generatedFiles.map((file) => ({
+    path: file.path,
+    content:
+      file.content.length > 12000
+        ? `${file.content.slice(0, 12000)}\n/* ...truncated... */`
+        : file.content,
+  }));
+
+  const prompt = REPO_VERIFICATION_PROMPT_TEMPLATE.replace(
+    '{analysisSummary}',
+    analysisSummary,
+  )
+    .replace(
+      '{issuesFromStaticChecks}',
+      JSON.stringify(issuesFromStaticChecks, null, 2),
+    )
+    .replace(
+      '{generatedFilesJson}',
+      JSON.stringify(compactFilesPayload, null, 2),
+    )
+    .replace('{passNumber}', String(passNumber));
+
+  try {
+    const response = await withRetry<GenerateContentResponse>(
+      () =>
+        client.models.generateContent({
+          model: 'gemini-3-pro-preview',
+          contents: prompt,
+          config: {
+            abortSignal,
+            systemInstruction: VERIFICATION_SYSTEM_INSTRUCTION,
+            responseMimeType: 'application/json',
+            thinkingConfig: { thinkingBudget: 2048 },
+          },
+        }),
+      { abortSignal },
+    );
+
+    const parsed = safeParseJson<{
+      passed?: boolean;
+      issues?: string[];
+      fixedFiles?: Array<{ path?: string; content?: string }>;
+    }>(response.text || '{}', {});
+
+    const fixedFiles = Array.isArray(parsed.fixedFiles)
+      ? parsed.fixedFiles
+          .map((file) => ({
+            path: typeof file?.path === 'string' ? file.path : '',
+            content: typeof file?.content === 'string' ? file.content : '',
+          }))
+          .filter(
+            (file) =>
+              Boolean(file.path) &&
+              Boolean(file.content) &&
+              existingPaths.has(file.path),
+          )
+      : [];
+
+    return {
+      passed: Boolean(parsed.passed),
+      issues: Array.isArray(parsed.issues)
+        ? parsed.issues.filter(
+            (item): item is string => typeof item === 'string',
+          )
+        : [],
+      fixedFiles,
+    };
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
+
+    console.error('Failed to verify repository files', error);
+    return {
+      passed: false,
+      issues: [
+        'Repository verification request failed. Manual review required.',
+      ],
+      fixedFiles: [],
+    };
   }
 };
