@@ -20,6 +20,8 @@ import {
   FileImage,
   Square,
   Clock3,
+  Copy,
+  Check,
 } from 'lucide-react';
 import AgentLogs from './AgentLogs';
 import FileExplorer from './FileExplorer';
@@ -27,8 +29,26 @@ import CodeEditor from './CodeEditor';
 import MigrationReportModal from './MigrationReportModal';
 import MigrationConfigModal from './MigrationConfig';
 import { NextjsIcon, ReactIcon, VueIcon, PythonIcon, PhpIcon } from './Icons';
-import { AgentStatus } from '../types';
+import { AgentStatus, FileNode } from '../types';
 import { useRepoMigration, isImageFile } from '../hooks/useRepoMigration';
+
+const flattenFilePaths = (nodes: FileNode[]): string[] => {
+  const filePaths: string[] = [];
+
+  const visit = (entries: FileNode[]) => {
+    for (const node of entries) {
+      if (node.type === 'file') {
+        filePaths.push(node.path);
+      }
+      if (node.children) {
+        visit(node.children);
+      }
+    }
+  };
+
+  visit(nodes);
+  return filePaths;
+};
 
 const getFrameworkIcon = (name: string) => {
   const normalizedName = name.toLowerCase();
@@ -81,14 +101,219 @@ const RepoMigration: React.FC = () => {
 
   const selectedIncludeSet = new Set(state.includeDirectories);
   const selectedExcludeSet = new Set(state.excludeDirectories);
+  const [copyStatus, setCopyStatus] = React.useState<
+    'idle' | 'copied' | 'error'
+  >('idle');
+
+  const activeFilePaths = React.useMemo(() => {
+    const tree =
+      state.activeTree === 'source' ? state.files : state.generatedFiles;
+    return flattenFilePaths(tree);
+  }, [state.activeTree, state.files, state.generatedFiles]);
+
+  const generationPercent =
+    state.generationProgress && state.generationProgress.total > 0
+      ? Math.round(
+          (state.generationProgress.current / state.generationProgress.total) *
+            100,
+        )
+      : 0;
+
+  const canCopyGeneratedCode = Boolean(
+    state.activeTree === 'target' &&
+    selectedNode &&
+    selectedNode.type === 'file' &&
+    !isImageFile(selectedNode.name) &&
+    selectedNode.content,
+  );
+
+  const copyGeneratedCode = React.useCallback(async () => {
+    if (
+      !(
+        selectedNode &&
+        selectedNode.type === 'file' &&
+        state.activeTree === 'target' &&
+        selectedNode.content
+      )
+    ) {
+      return;
+    }
+
+    const text = selectedNode.content;
+    const fallbackCopy = (): boolean => {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      try {
+        return document.execCommand('copy');
+      } finally {
+        document.body.removeChild(textarea);
+      }
+    };
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        setCopyStatus('copied');
+        return;
+      }
+
+      setCopyStatus(fallbackCopy() ? 'copied' : 'error');
+    } catch {
+      setCopyStatus(fallbackCopy() ? 'copied' : 'error');
+    }
+  }, [selectedNode, state.activeTree]);
+
+  React.useEffect(() => {
+    if (copyStatus === 'idle') {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setCopyStatus('idle');
+    }, 1600);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [copyStatus]);
+
+  React.useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isEditableElement = Boolean(
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.tagName === 'SELECT' ||
+          target.isContentEditable),
+      );
+
+      if (event.key === 'Escape') {
+        if (isDiagramOpen) {
+          event.preventDefault();
+          setIsDiagramOpen(false);
+          return;
+        }
+        if (showReport) {
+          event.preventDefault();
+          setShowReport(false);
+          return;
+        }
+        if (showConfigModal) {
+          event.preventDefault();
+          setShowConfigModal(false);
+        }
+        return;
+      }
+
+      if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        event.preventDefault();
+
+        if (isBusy || !state.url) {
+          return;
+        }
+
+        if (!isAnalyzed) {
+          void startRepoProcess();
+          return;
+        }
+
+        if (
+          state.status === AgentStatus.CONVERTING ||
+          state.status === AgentStatus.VERIFYING
+        ) {
+          return;
+        }
+
+        handleConfigConfirm();
+        return;
+      }
+
+      if (isEditableElement) {
+        return;
+      }
+
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        setActiveTree('source');
+        return;
+      }
+
+      if (event.key === 'ArrowRight') {
+        if (state.generatedFiles.length === 0) {
+          return;
+        }
+        event.preventDefault();
+        setActiveTree('target');
+        return;
+      }
+
+      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+        return;
+      }
+
+      if (activeFilePaths.length === 0) {
+        return;
+      }
+
+      event.preventDefault();
+
+      const selectedIndex = state.selectedFile
+        ? activeFilePaths.indexOf(state.selectedFile)
+        : -1;
+
+      if (event.key === 'ArrowDown') {
+        const nextIndex =
+          selectedIndex < 0
+            ? 0
+            : Math.min(selectedIndex + 1, activeFilePaths.length - 1);
+        void handleFileSelect(activeFilePaths[nextIndex]);
+        return;
+      }
+
+      const previousIndex =
+        selectedIndex < 0
+          ? activeFilePaths.length - 1
+          : Math.max(selectedIndex - 1, 0);
+      void handleFileSelect(activeFilePaths[previousIndex]);
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [
+    activeFilePaths,
+    handleConfigConfirm,
+    handleFileSelect,
+    isAnalyzed,
+    isBusy,
+    isDiagramOpen,
+    setActiveTree,
+    setIsDiagramOpen,
+    setShowConfigModal,
+    setShowReport,
+    showConfigModal,
+    showReport,
+    startRepoProcess,
+    state.generatedFiles.length,
+    state.selectedFile,
+    state.status,
+    state.url,
+  ]);
 
   return (
     <>
       <div className="flex flex-col gap-6 h-full overflow-hidden">
         <div className="bg-dark-800 p-4 rounded-xl border border-dark-700 flex flex-col gap-4 shrink-0 shadow-lg">
           <div className="flex flex-col gap-2 w-full">
-            <div className="flex items-center gap-3 text-xs mb-1">
-              <span className="text-gray-500 font-medium uppercase tracking-wider">
+            <div className="flex flex-wrap items-center gap-2 text-xs mb-1">
+              <span className="text-gray-500 font-medium uppercase tracking-wider w-full sm:w-auto">
                 Try an example:
               </span>
 
@@ -280,8 +505,8 @@ const RepoMigration: React.FC = () => {
             )}
           </div>
 
-          <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
-            <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
+          <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3 w-full md:w-auto">
               <button
                 onClick={() => void startRepoProcess()}
                 disabled={isBusy || !state.url}
@@ -393,6 +618,35 @@ const RepoMigration: React.FC = () => {
             </div>
           </div>
 
+          {state.status === AgentStatus.CONVERTING &&
+            state.generationProgress &&
+            state.generationProgress.total > 0 && (
+              <div className="rounded-lg border border-accent-500/20 bg-accent-900/10 p-3 flex flex-col gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
+                  <span className="text-accent-100">
+                    Generating file {state.generationProgress.current} of{' '}
+                    {state.generationProgress.total}
+                  </span>
+                  <span className="text-accent-300/80">
+                    {Math.max(0, Math.min(100, generationPercent))}%
+                  </span>
+                </div>
+                <div className="h-2 w-full bg-dark-900 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-accent-500 transition-all duration-300"
+                    style={{
+                      width: `${Math.max(0, Math.min(100, generationPercent))}%`,
+                    }}
+                  />
+                </div>
+                {state.generationProgress.currentFile && (
+                  <p className="text-[11px] text-gray-300 truncate font-mono">
+                    {state.generationProgress.currentFile}
+                  </p>
+                )}
+              </div>
+            )}
+
           {state.analysis && (
             <div className="mt-2 pt-4 border-t border-dark-700 flex flex-col md:flex-row gap-6 animate-in fade-in slide-in-from-top-2">
               <div className="flex-1 min-w-0 flex flex-col gap-3">
@@ -472,12 +726,12 @@ const RepoMigration: React.FC = () => {
           )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-0">
-          <div className="lg:col-span-4 flex flex-col h-full min-h-0 order-3 lg:order-1">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-4 flex-1 min-h-0">
+          <div className="md:col-span-12 lg:col-span-4 flex flex-col h-full min-h-0 order-3 lg:order-1">
             <AgentLogs logs={state.logs} />
           </div>
 
-          <div className="lg:col-span-2 flex flex-col h-full min-h-0 order-1 lg:order-2">
+          <div className="md:col-span-4 lg:col-span-2 flex flex-col h-full min-h-0 order-1 lg:order-2">
             <FileExplorer
               files={
                 state.activeTree === 'source'
@@ -491,7 +745,7 @@ const RepoMigration: React.FC = () => {
             />
           </div>
 
-          <div className="lg:col-span-6 flex flex-col h-full min-h-0 order-2 lg:order-3">
+          <div className="md:col-span-8 lg:col-span-6 flex flex-col h-full min-h-0 order-2 lg:order-3">
             <div className="flex-1 bg-dark-800 rounded-xl border border-dark-700 overflow-hidden relative min-h-0 shadow-lg flex flex-col h-full">
               {selectedNode && selectedNode.type === 'file' ? (
                 isImageFile(selectedNode.name) ? (
@@ -523,28 +777,58 @@ const RepoMigration: React.FC = () => {
                     </div>
                   </div>
                 ) : (
-                  <CodeEditor
-                    title={
-                      state.activeTree === 'source'
-                        ? `Legacy / ${selectedNode.name}`
-                        : `Next.js / ${selectedNode.name}`
-                    }
-                    language={
-                      state.activeTree === 'source'
-                        ? state.sourceLang
-                        : 'TypeScript'
-                    }
-                    code={
-                      selectedNode.content ||
-                      (state.activeTree === 'target'
-                        ? '// Generating...'
-                        : '// Loading...')
-                    }
-                    readOnly={true}
-                    highlight={
-                      state.activeTree === 'target' && !!selectedNode.content
-                    }
-                  />
+                  <div className="flex flex-col h-full min-h-0">
+                    {canCopyGeneratedCode && (
+                      <div className="px-3 py-2 border-b border-dark-700 bg-dark-900/80 flex justify-end">
+                        <button
+                          onClick={() => void copyGeneratedCode()}
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border transition-colors ${
+                            copyStatus === 'copied'
+                              ? 'text-green-200 bg-green-900/30 border-green-500/40'
+                              : copyStatus === 'error'
+                                ? 'text-red-200 bg-red-900/30 border-red-500/40'
+                                : 'text-gray-200 bg-dark-800 border-dark-600 hover:bg-dark-700'
+                          }`}
+                        >
+                          {copyStatus === 'copied' ? (
+                            <Check className="w-3.5 h-3.5" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                          {copyStatus === 'copied'
+                            ? 'Copied'
+                            : copyStatus === 'error'
+                              ? 'Copy failed'
+                              : 'Copy Code'}
+                        </button>
+                      </div>
+                    )}
+                    <div className="flex-1 min-h-0">
+                      <CodeEditor
+                        title={
+                          state.activeTree === 'source'
+                            ? `Legacy / ${selectedNode.name}`
+                            : `Next.js / ${selectedNode.name}`
+                        }
+                        language={
+                          state.activeTree === 'source'
+                            ? state.sourceLang
+                            : 'TypeScript'
+                        }
+                        code={
+                          selectedNode.content ||
+                          (state.activeTree === 'target'
+                            ? '// Generating...'
+                            : '// Loading...')
+                        }
+                        readOnly={true}
+                        highlight={
+                          state.activeTree === 'target' &&
+                          !!selectedNode.content
+                        }
+                      />
+                    </div>
+                  </div>
                 )
               ) : (
                 <div className="flex-1 flex flex-col items-center justify-center text-gray-500 p-8">

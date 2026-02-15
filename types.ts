@@ -64,6 +64,12 @@ export interface RepoScopeInfo {
   availableDirectories: string[];
 }
 
+export interface GenerationProgress {
+  current: number;
+  total: number;
+  currentFile: string | null;
+}
+
 export interface LogEntry {
   id: string;
   timestamp: Date;
@@ -126,6 +132,7 @@ export interface RepoState {
   config: MigrationConfig;
   githubRateLimit: GitHubRateLimitInfo | null;
   repoScope: RepoScopeInfo | null;
+  generationProgress: GenerationProgress | null;
 }
 
 export const LANGUAGES = [
