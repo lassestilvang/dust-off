@@ -10,7 +10,7 @@ import { fetchFileContent, fetchRepoStructure } from './githubService';
 import {
   analyzeRepository,
   generateArchitectureDiagram,
-  generateNextJsFile,
+  generateNextJsFileStream,
   generateProjectStructure,
 } from './geminiService';
 import {
@@ -18,6 +18,7 @@ import {
   DependencyGraph,
   getRelatedFiles,
 } from './dependencyGraph';
+import { abortIfSignaled, isAbortError } from './abortUtils';
 
 const MAX_ANALYSIS_PATHS = 500;
 const MAX_CONTEXT_FILES = 50;
@@ -32,6 +33,7 @@ export interface AnalyzePhaseInput {
   url: string;
   addLog: AddLogFn;
   ensureDiagramApiKey: () => Promise<boolean>;
+  abortSignal?: AbortSignal;
 }
 
 export interface AnalyzePhaseResult {
@@ -46,6 +48,7 @@ export interface ScaffoldPhaseInput {
   analysis: RepoAnalysisResult;
   config: MigrationConfig;
   addLog: AddLogFn;
+  abortSignal?: AbortSignal;
 }
 
 export interface ScaffoldPhaseResult {
@@ -66,8 +69,10 @@ export interface GeneratePhaseInput {
   config: MigrationConfig;
   addLog: AddLogFn;
   onFileStart: (path: string) => void;
+  onFileChunk: (path: string, content: string) => void;
   onFileGenerated: (path: string, content: string) => void;
   onFileError: (path: string) => void;
+  abortSignal?: AbortSignal;
 }
 
 export const flattenFiles = (nodes: FileNode[]): FileNode[] => {
@@ -130,13 +135,15 @@ export const runAnalyzePhase = async ({
   url,
   addLog,
   ensureDiagramApiKey,
+  abortSignal,
 }: AnalyzePhaseInput): Promise<AnalyzePhaseResult> => {
+  abortIfSignaled(abortSignal);
   addLog(
     `Cloning repository structure from ${url}...`,
     'info',
     AgentStatus.ANALYZING,
   );
-  const files = await fetchRepoStructure(url);
+  const files = await fetchRepoStructure(url, { signal: abortSignal });
 
   addLog(
     `File index built: ${flattenFiles(files).length} nodes detected.`,
@@ -152,11 +159,19 @@ export const runAnalyzePhase = async ({
   let readme: string;
 
   try {
-    readme = await fetchFileContent(url, 'README.md');
-  } catch {
+    readme = await fetchFileContent(url, 'README.md', { signal: abortSignal });
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
     try {
-      readme = await fetchFileContent(url, 'readme.md');
-    } catch {
+      readme = await fetchFileContent(url, 'readme.md', {
+        signal: abortSignal,
+      });
+    } catch (readmeError) {
+      if (isAbortError(readmeError)) {
+        throw readmeError;
+      }
       addLog(
         'README.md not found, proceeding with file structure analysis only.',
         'warning',
@@ -178,6 +193,7 @@ export const runAnalyzePhase = async ({
   const analysis = await analyzeRepository(
     JSON.stringify(limitedPaths),
     readme,
+    { abortSignal },
   );
 
   addLog(
@@ -196,10 +212,12 @@ export const runAnalyzePhase = async ({
     );
 
     const canGenerateDiagram = await ensureDiagramApiKey();
+    abortIfSignaled(abortSignal);
 
     if (canGenerateDiagram) {
       diagram = await generateArchitectureDiagram(
         analysis.architectureDescription,
+        { abortSignal },
       );
 
       if (diagram) {
@@ -233,7 +251,9 @@ export const runScaffoldPhase = async ({
   analysis,
   config,
   addLog,
+  abortSignal,
 }: ScaffoldPhaseInput): Promise<ScaffoldPhaseResult> => {
+  abortIfSignaled(abortSignal);
   addLog(
     `Ingesting key legacy source files for context (Max ${MAX_CONTEXT_FILES})...`,
     'info',
@@ -255,11 +275,17 @@ export const runScaffoldPhase = async ({
   const fileContents: Record<string, string> = {};
 
   for (const file of filesToRead) {
+    abortIfSignaled(abortSignal);
     try {
-      const content = await fetchFileContent(url, file.path);
+      const content = await fetchFileContent(url, file.path, {
+        signal: abortSignal,
+      });
       sourceContext += `\n\n--- FILE: ${file.path} ---\n${content}`;
       fileContents[file.path] = content;
-    } catch (_error) {
+    } catch (error) {
+      if (isAbortError(error)) {
+        throw error;
+      }
       console.warn(`Failed to read ${file.path}`);
     }
   }
@@ -295,6 +321,7 @@ export const runScaffoldPhase = async ({
     analysis.summary,
     config,
     config.testingLibrary !== 'none',
+    { abortSignal },
   );
 
   const generatedFiles = buildTreeFromPaths(generatedFilePaths);
@@ -324,14 +351,17 @@ export const runGeneratePhase = async ({
   config,
   addLog,
   onFileStart,
+  onFileChunk,
   onFileGenerated,
   onFileError,
+  abortSignal,
 }: GeneratePhaseInput): Promise<void> => {
   const flatTargetFiles = flattenFiles(generatedFiles).filter(
     (file) => file.type === 'file',
   );
 
   for (const file of flatTargetFiles) {
+    abortIfSignaled(abortSignal);
     onFileStart(file.path);
     addLog(`Generating ${file.path}...`, 'info', AgentStatus.CONVERTING);
 
@@ -356,15 +386,20 @@ export const runGeneratePhase = async ({
         }
       }
 
-      const content = await generateNextJsFile(
+      const content = await generateNextJsFileStream(
         file.path,
         sourceContext,
         relatedContext,
         config,
+        (streamedContent) => onFileChunk(file.path, streamedContent),
+        { abortSignal },
       );
 
       onFileGenerated(file.path, content);
-    } catch (_error) {
+    } catch (error) {
+      if (isAbortError(error)) {
+        throw error;
+      }
       onFileError(file.path);
       addLog(
         `Failed to generate ${file.path}`,

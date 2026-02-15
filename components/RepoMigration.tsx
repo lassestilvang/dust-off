@@ -18,6 +18,7 @@ import {
   AlertCircle,
   ExternalLink,
   FileImage,
+  Square,
 } from 'lucide-react';
 import AgentLogs from './AgentLogs';
 import FileExplorer from './FileExplorer';
@@ -62,6 +63,7 @@ const RepoMigration: React.FC = () => {
     setConfig,
     setActiveTree,
     startRepoProcess,
+    cancelCurrentRun,
     handleConfigConfirm,
     handleDownload,
     handleFileSelect,
@@ -231,6 +233,15 @@ const RepoMigration: React.FC = () => {
                   {state.status === AgentStatus.CONVERTING
                     ? 'Building Project...'
                     : 'Configure & Build'}
+                </button>
+              )}
+              {isBusy && (
+                <button
+                  onClick={cancelCurrentRun}
+                  className="flex items-center justify-center gap-2 py-2 px-4 rounded-lg font-bold text-sm transition-all whitespace-nowrap bg-red-700/90 hover:bg-red-600 text-white border border-red-500/40"
+                >
+                  <Square className="w-3.5 h-3.5 fill-current" />
+                  Cancel
                 </button>
               )}
               {showConfigModal && (

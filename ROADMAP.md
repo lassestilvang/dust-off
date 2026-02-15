@@ -6,6 +6,8 @@
 - Completed: #2 Build-time Tailwind migration
 - Completed: #3 Removed `index.html` importmap/CDN module mapping
 - Completed: #4 Migrated large `RepoState` updates to typed `useReducer`
+- Completed: #6 Cancellation support
+- Completed: #7 Streaming/progressive file generation
 
 ## 🏗️ ARCHITECTURE & CODE QUALITY
 
@@ -34,10 +36,10 @@
   - Get 5,000 req/hr instead of 60
   - Access branch selection
 
-- [ ] **6. Cancellation support**
+- [x] **6. Cancellation support**
   There's no way to cancel a long-running migration. Add an `AbortController` pattern to cancel in-flight Gemini API calls and GitHub fetches.
 
-- [ ] **7. Streaming / progressive file generation**
+- [x] **7. Streaming / progressive file generation**
   Currently files are generated sequentially with no streaming. Use Gemini's streaming API (`generateContentStream`) to show code appearing character-by-character in the editor — much better UX for long waits.
 
 - [ ] **8. Side-by-side diff view (source → target)**

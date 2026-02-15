@@ -26,6 +26,7 @@ import {
   runScaffoldPhase,
 } from '../services/migrationOrchestrator';
 import { useMigrationLogs } from './useMigrationLogs';
+import { isAbortError } from '../services/abortUtils';
 
 declare global {
   interface Window {
@@ -223,6 +224,7 @@ interface UseRepoMigrationResult {
   setConfig: (config: MigrationConfig) => void;
   setActiveTree: (tree: 'source' | 'target') => void;
   startRepoProcess: () => Promise<void>;
+  cancelCurrentRun: () => void;
   handleConfigConfirm: () => void;
   handleDownload: () => Promise<void>;
   handleFileSelect: (path: string) => Promise<void>;
@@ -233,11 +235,20 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
   const [isDiagramOpen, setIsDiagramOpen] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
+  const activeControllerRef = useRef<AbortController | null>(null);
+  const cancelRequestedRef = useRef(false);
 
   const stateRef = useRef(state);
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+
+  useEffect(() => {
+    return () => {
+      activeControllerRef.current?.abort();
+      activeControllerRef.current = null;
+    };
+  }, []);
 
   const appendLog = useCallback((entry: LogEntry) => {
     dispatch({ type: 'add_log', payload: entry });
@@ -260,6 +271,19 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
   const setActiveTree = useCallback((tree: 'source' | 'target') => {
     dispatch({ type: 'set_active_tree', payload: tree });
   }, []);
+
+  const cancelCurrentRun = useCallback(() => {
+    if (!activeControllerRef.current) {
+      return;
+    }
+
+    const currentStatus = stateRef.current.status;
+    cancelRequestedRef.current = true;
+    activeControllerRef.current.abort();
+    activeControllerRef.current = null;
+    dispatch({ type: 'set_status', payload: AgentStatus.IDLE });
+    addLog('Operation cancelled by user.', 'warning', currentStatus);
+  }, [addLog]);
 
   const ensureDiagramApiKey = useCallback(async (): Promise<boolean> => {
     let hasKey = false;
@@ -297,12 +321,16 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
     }
 
     dispatch({ type: 'reset_for_analysis' });
+    cancelRequestedRef.current = false;
+    const controller = new AbortController();
+    activeControllerRef.current = controller;
 
     try {
       const result = await runAnalyzePhase({
         url,
         addLog,
         ensureDiagramApiKey,
+        abortSignal: controller.signal,
       });
 
       dispatch({ type: 'set_files', payload: result.files });
@@ -314,10 +342,22 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
 
       dispatch({ type: 'set_status', payload: AgentStatus.IDLE });
     } catch (error: unknown) {
+      if (isAbortError(error)) {
+        if (!cancelRequestedRef.current) {
+          addLog('Operation cancelled.', 'warning', AgentStatus.IDLE);
+        }
+        dispatch({ type: 'set_status', payload: AgentStatus.IDLE });
+        return;
+      }
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       addLog(`Fatal Error: ${errorMessage}`, 'error', AgentStatus.ERROR);
       dispatch({ type: 'set_status', payload: AgentStatus.ERROR });
+    } finally {
+      if (activeControllerRef.current === controller) {
+        activeControllerRef.current = null;
+      }
+      cancelRequestedRef.current = false;
     }
   }, [addLog, ensureDiagramApiKey]);
 
@@ -329,6 +369,9 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
     }
 
     dispatch({ type: 'set_status', payload: AgentStatus.CONVERTING });
+    cancelRequestedRef.current = false;
+    const controller = new AbortController();
+    activeControllerRef.current = controller;
 
     try {
       const scaffoldResult = await runScaffoldPhase({
@@ -337,6 +380,7 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
         analysis: currentState.analysis,
         config: currentState.config,
         addLog,
+        abortSignal: controller.signal,
       });
 
       dispatch({
@@ -357,12 +401,19 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
         graph: scaffoldResult.graph,
         config: currentState.config,
         addLog,
+        abortSignal: controller.signal,
         onFileStart: (path) => {
           dispatch({
             type: 'update_file_status',
             payload: { path, status: 'migrating', tree: 'target' },
           });
           dispatch({ type: 'set_selected_file', payload: path });
+        },
+        onFileChunk: (path, content) => {
+          dispatch({
+            type: 'update_file_content',
+            payload: { path, content, tree: 'target' },
+          });
         },
         onFileGenerated: (path, content) => {
           dispatch({
@@ -400,10 +451,22 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
         AgentStatus.COMPLETED,
       );
     } catch (error: unknown) {
+      if (isAbortError(error)) {
+        if (!cancelRequestedRef.current) {
+          addLog('Operation cancelled.', 'warning', AgentStatus.IDLE);
+        }
+        dispatch({ type: 'set_status', payload: AgentStatus.IDLE });
+        return;
+      }
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       addLog(`Fatal Error: ${errorMessage}`, 'error', AgentStatus.ERROR);
       dispatch({ type: 'set_status', payload: AgentStatus.ERROR });
+    } finally {
+      if (activeControllerRef.current === controller) {
+        activeControllerRef.current = null;
+      }
+      cancelRequestedRef.current = false;
     }
   }, [addLog]);
 
@@ -532,6 +595,7 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
     setConfig,
     setActiveTree,
     startRepoProcess,
+    cancelCurrentRun,
     handleConfigConfirm,
     handleDownload,
     handleFileSelect,

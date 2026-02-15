@@ -1,4 +1,5 @@
 import { FileNode } from '../types';
+import { abortIfSignaled, isAbortError } from './abortUtils';
 
 interface GitHubTreeItem {
   path: string;
@@ -128,7 +129,13 @@ const buildFileTree = (items: GitHubTreeItem[]): FileNode[] => {
   return root;
 };
 
-export const fetchRepoStructure = async (url: string): Promise<FileNode[]> => {
+export const fetchRepoStructure = async (
+  url: string,
+  options?: { signal?: AbortSignal },
+): Promise<FileNode[]> => {
+  const { signal } = options || {};
+  abortIfSignaled(signal);
+
   const repoInfo = parseGitHubUrl(url);
   if (!repoInfo)
     throw new Error(
@@ -138,8 +145,10 @@ export const fetchRepoStructure = async (url: string): Promise<FileNode[]> => {
   // 1. Get the default branch
   let branch = 'main';
   try {
+    abortIfSignaled(signal);
     const repoDetailsRes = await fetch(
       `https://api.github.com/repos/${repoInfo.owner}/${repoInfo.repo}`,
+      { signal },
     );
 
     if (repoDetailsRes.ok) {
@@ -153,6 +162,9 @@ export const fetchRepoStructure = async (url: string): Promise<FileNode[]> => {
       throw new Error('GitHub API rate limit exceeded.');
     }
   } catch (e: unknown) {
+    if (isAbortError(e)) {
+      throw e;
+    }
     if (e instanceof Error) {
       if (e.message.includes('rate limit') || e.message.includes('not found'))
         throw e;
@@ -163,7 +175,8 @@ export const fetchRepoStructure = async (url: string): Promise<FileNode[]> => {
   // 2. Fetch Recursive Tree
   const apiUrl = `https://api.github.com/repos/${repoInfo.owner}/${repoInfo.repo}/git/trees/${branch}?recursive=1`;
 
-  const response = await fetch(apiUrl);
+  abortIfSignaled(signal);
+  const response = await fetch(apiUrl, { signal });
 
   if (!response.ok) {
     if (response.status === 403 || response.status === 429) {
@@ -189,13 +202,17 @@ export const fetchRepoStructure = async (url: string): Promise<FileNode[]> => {
 export const fetchFileContent = async (
   url: string,
   path: string,
+  options?: { signal?: AbortSignal },
 ): Promise<string> => {
+  const { signal } = options || {};
+  abortIfSignaled(signal);
+
   const repoInfo = parseGitHubUrl(url);
   if (!repoInfo) throw new Error('Invalid URL');
 
   const apiUrl = `https://api.github.com/repos/${repoInfo.owner}/${repoInfo.repo}/contents/${path}`;
 
-  const response = await fetch(apiUrl);
+  const response = await fetch(apiUrl, { signal });
 
   if (!response.ok) {
     if (response.status === 403 || response.status === 429) {
