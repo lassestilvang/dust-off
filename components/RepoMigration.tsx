@@ -1,40 +1,4 @@
-import React, { useState } from 'react';
-
-declare global {
-  interface Window {
-    aistudio?: {
-      hasSelectedApiKey: () => Promise<boolean>;
-      openSelectKey: () => Promise<void>;
-    };
-  }
-}
-import {
-  AgentStatus,
-  RepoState,
-  LogEntry,
-  FileNode,
-  RepoAnalysisResult,
-  MigrationReport,
-} from '../types';
-import {
-  fetchRepoStructure,
-  fetchFileContent,
-} from '../services/githubService';
-import {
-  analyzeRepository,
-  generateArchitectureDiagram,
-  generateProjectStructure,
-  generateNextJsFile,
-} from '../services/geminiService';
-import {
-  buildDependencyGraph,
-  getRelatedFiles,
-} from '../services/dependencyGraph';
-import AgentLogs from './AgentLogs';
-import FileExplorer from './FileExplorer';
-import CodeEditor from './CodeEditor';
-import MigrationReportModal from './MigrationReportModal';
-import MigrationConfigModal from './MigrationConfig';
+import React from 'react';
 import {
   Github,
   Play,
@@ -55,603 +19,70 @@ import {
   ExternalLink,
   FileImage,
 } from 'lucide-react';
+import AgentLogs from './AgentLogs';
+import FileExplorer from './FileExplorer';
+import CodeEditor from './CodeEditor';
+import MigrationReportModal from './MigrationReportModal';
+import MigrationConfigModal from './MigrationConfig';
 import { NextjsIcon, ReactIcon, VueIcon, PythonIcon, PhpIcon } from './Icons';
-import { v4 as uuidv4 } from 'uuid';
-import JSZip from 'jszip';
+import { AgentStatus } from '../types';
+import { useRepoMigration, isImageFile } from '../hooks/useRepoMigration';
 
-// --- Utility Functions (Outside Component for Purity & Performance) ---
-
-const flattenFiles = (nodes: FileNode[]): FileNode[] => {
-  let result: FileNode[] = [];
-  nodes.forEach((node) => {
-    result.push(node);
-    if (node.children) result = result.concat(flattenFiles(node.children));
-  });
-  return result;
-};
-
-const buildTreeFromPaths = (paths: string[]): FileNode[] => {
-  const root: FileNode[] = [];
-  const map: Record<string, FileNode> = {};
-
-  paths.sort();
-
-  paths.forEach((path) => {
-    const parts = path.split('/');
-    let currentPath = '';
-
-    parts.forEach((part, index) => {
-      const isFile = index === parts.length - 1;
-      const parentPath = currentPath;
-      currentPath = currentPath ? `${currentPath}/${part}` : part;
-
-      if (!map[currentPath]) {
-        const node: FileNode = {
-          name: part,
-          path: currentPath,
-          type: isFile ? 'file' : 'dir',
-          status: 'pending',
-          children: isFile ? undefined : [],
-        };
-        map[currentPath] = node;
-
-        if (index === 0) {
-          root.push(node);
-        } else {
-          const parent = map[parentPath];
-          if (parent && parent.children) {
-            parent.children.push(node);
-          }
-        }
-      }
-    });
-  });
-  return root;
-};
-
-const generateReport = (
-  sourceFiles: FileNode[],
-  targetFiles: FileNode[],
-  startTime: number,
-  endTime: number,
-  analysis: RepoAnalysisResult,
-): MigrationReport => {
-  const flatTarget = flattenFiles(targetFiles);
-  const flatSource = flattenFiles(sourceFiles);
-
-  const durationMs = endTime - startTime;
-  const duration =
-    durationMs > 60000
-      ? `${Math.round(durationMs / 60000)}m ${Math.round((durationMs % 60000) / 1000)}s`
-      : `${Math.round(durationMs / 1000)}s`;
-
-  const totalFiles = flatSource.filter((f) => f.type === 'file').length;
-  const filesGenerated = flatTarget.filter((f) => f.type === 'file').length;
-
-  // Type Safety Score
-  const tsFiles = flatTarget.filter(
-    (f) => f.path.endsWith('.ts') || f.path.endsWith('.tsx'),
-  ).length;
-  const typeScriptCoverage = Math.round(
-    (tsFiles / Math.max(filesGenerated, 1)) * 100,
-  );
-
-  // Test Coverage Est
-  const testFiles = flatTarget.filter(
-    (f) => f.path.includes('.test.') || f.path.includes('__tests__'),
-  ).length;
-  const testCoverage =
-    testFiles > 0
-      ? Math.round((testFiles / Math.max(filesGenerated - testFiles, 1)) * 80)
-      : 0; // Rough estimate
-
-  // Modernization Score (Arbitrary but fun metric)
-  let score = 0;
-  score += typeScriptCoverage * 0.4;
-  score += testCoverage > 0 ? 20 : 0;
-  score += 40; // Base score for moving to Next.js
-  const modernizationScore = Math.min(Math.round(score), 100);
-
-  const techStackChanges = [
-    { from: analysis.detectedFramework, to: 'Next.js 16.1 (App Router)' },
-    { from: 'CSS / SCSS', to: 'Tailwind CSS' },
-    { from: 'JavaScript', to: 'TypeScript 5' },
-  ];
-
-  return {
-    duration,
-    totalFiles,
-    filesGenerated,
-    modernizationScore,
-    typeScriptCoverage,
-    testCoverage,
-    testsGenerated: testFiles,
-    techStackChanges,
-    keyImprovements: [
-      'Implemented Server Side Rendering (SSR) for initial load',
-      'Migrated global state to React Context / Hooks',
-      `Added ${testFiles} unit test suites with Vitest`,
-      'Enforced strict type safety across components',
-    ],
-    newDependencies: 12, // Estimate based on standard Next.js scaffold
-  };
-};
-
-const isImageFile = (filename: string) => {
-  return /\.(png|jpg|jpeg|gif|ico|svg|webp|bmp)$/i.test(filename);
-};
-
-// Helper to resolve icon based on framework name
 const getFrameworkIcon = (name: string) => {
-  const n = name.toLowerCase();
-  if (n.includes('react'))
+  const normalizedName = name.toLowerCase();
+  if (normalizedName.includes('react')) {
     return <ReactIcon className="w-4 h-4 text-blue-400" />;
-  if (n.includes('vue')) return <VueIcon className="w-4 h-4 text-green-400" />;
-  if (n.includes('python'))
+  }
+  if (normalizedName.includes('vue')) {
+    return <VueIcon className="w-4 h-4 text-green-400" />;
+  }
+  if (normalizedName.includes('python')) {
     return <PythonIcon className="w-4 h-4 text-blue-300" />;
-  if (n.includes('php') || n.includes('laravel'))
+  }
+  if (normalizedName.includes('php') || normalizedName.includes('laravel')) {
     return <PhpIcon className="w-4 h-4 text-indigo-400" />;
+  }
   return <Code2 className="w-4 h-4 text-gray-400" />;
 };
 
 const RepoMigration: React.FC = () => {
-  const [state, setState] = useState<RepoState>({
-    url: '',
-    branch: 'main',
-    status: AgentStatus.IDLE,
-    files: [], // Source
-    generatedFiles: [], // Target
-    selectedFile: null,
-    activeTree: 'source',
-    logs: [],
-    analysis: null,
-    diagram: null,
-    sourceLang: 'JavaScript',
-    targetLang: 'Next.js + TypeScript',
-    sourceContext: '',
-    report: null,
-    config: {
-      uiFramework: 'tailwind',
-      stateManagement: 'context',
-      testingLibrary: 'vitest',
-    },
-  });
-
-  const [isDiagramOpen, setIsDiagramOpen] = useState(false);
-  const [showReport, setShowReport] = useState(false);
-  const [showConfigModal, setShowConfigModal] = useState(false);
-
-  const addLog = (message: string, type: LogEntry['type'] = 'info') => {
-    setState((prev) => ({
-      ...prev,
-      logs: [
-        ...prev.logs,
-        {
-          id: uuidv4(),
-          timestamp: new Date(),
-          step: prev.status,
-          message,
-          type,
-        },
-      ],
-    }));
-  };
-
-  const updateFileStatus = (
-    path: string,
-    status: FileNode['status'],
-    tree: 'source' | 'target',
-  ) => {
-    setState((prev) => {
-      const targetTree = tree === 'source' ? prev.files : prev.generatedFiles;
-      const updateNode = (nodes: FileNode[]): FileNode[] => {
-        return nodes.map((node) => {
-          if (node.path === path) return { ...node, status };
-          if (node.children)
-            return { ...node, children: updateNode(node.children) };
-          return node;
-        });
-      };
-      const updatedTree = updateNode(targetTree);
-      return tree === 'source'
-        ? { ...prev, files: updatedTree }
-        : { ...prev, generatedFiles: updatedTree };
-    });
-  };
-
-  const updateFileContent = (
-    path: string,
-    content: string,
-    tree: 'source' | 'target',
-  ) => {
-    setState((prev) => {
-      const targetTree = tree === 'source' ? prev.files : prev.generatedFiles;
-      const updateNode = (nodes: FileNode[]): FileNode[] => {
-        return nodes.map((node) => {
-          if (node.path === path) return { ...node, content };
-          if (node.children)
-            return { ...node, children: updateNode(node.children) };
-          return node;
-        });
-      };
-      const updatedTree = updateNode(targetTree);
-      return tree === 'source'
-        ? { ...prev, files: updatedTree }
-        : { ...prev, generatedFiles: updatedTree };
-    });
-  };
-
-  const startRepoProcess = async () => {
-    if (!state.url) {
-      addLog('Please enter a valid GitHub URL.', 'error');
-      return;
-    }
-
-    setState((prev) => ({
-      ...prev,
-      status: AgentStatus.ANALYZING,
-      logs: [],
-      files: [],
-      generatedFiles: [],
-      analysis: null,
-      diagram: null,
-      sourceContext: '',
-      activeTree: 'source',
-      report: null,
-      startTime: Date.now(),
-    }));
-    addLog(`Cloning repository structure from ${state.url}...`);
-
-    try {
-      // 1. Fetch Files (Structure)
-      const files = await fetchRepoStructure(state.url);
-
-      setState((prev) => ({ ...prev, files }));
-      addLog(
-        `File index built: ${flattenFiles(files).length} nodes detected.`,
-        'success',
-      );
-
-      // 2. Analyze (Readme + List)
-      addLog('Reading README and package configuration...', 'info');
-      let readme = 'No README found.';
-
-      try {
-        readme = await fetchFileContent(state.url, 'README.md');
-      } catch {
-        try {
-          readme = await fetchFileContent(state.url, 'readme.md');
-        } catch {
-          addLog(
-            'README.md not found, proceeding with file structure analysis only.',
-            'warning',
-          );
-          readme = 'No README found in repository.';
-        }
-      }
-
-      addLog('Engaging Deep Static Analysis (Gemini 3 Pro)...', 'info');
-
-      // Flatten paths for analysis context
-      const allPaths = flattenFiles(files).map((f) => f.path);
-      // Limit paths to avoid huge prompts if repo is massive, take top 500
-      const limitedPaths = allPaths.slice(0, 500);
-
-      const analysis = await analyzeRepository(
-        JSON.stringify(limitedPaths),
-        readme,
-      );
-
-      setState((prev) => ({
-        ...prev,
-        analysis,
-        sourceLang: analysis.detectedFramework,
-        targetLang: 'Next.js + TypeScript',
-        status: AgentStatus.PLANNING,
-      }));
-      addLog(
-        `Detected: ${analysis.detectedFramework}. Target locked: Next.js (App Router).`,
-        'success',
-      );
-
-      // 3. Generate Diagram Immediately
-      if (analysis.architectureDescription) {
-        addLog('Generating legacy architecture diagram...', 'info');
-
-        let hasKey = false;
-        const apiStudio = window.aistudio;
-        if (apiStudio) {
-          try {
-            hasKey = await apiStudio.hasSelectedApiKey();
-            if (!hasKey) {
-              addLog('Requesting API Key for visual generation...', 'warning');
-              await apiStudio.openSelectKey();
-              hasKey = await apiStudio.hasSelectedApiKey();
-            }
-          } catch (_e) {
-            console.error('Auth flow error', _e);
-          }
-        }
-
-        if (
-          hasKey ||
-          (process.env as Record<string, string | undefined>).API_KEY
-        ) {
-          const diagram = await generateArchitectureDiagram(
-            analysis.architectureDescription,
-          );
-          if (diagram) {
-            setState((prev) => ({ ...prev, diagram }));
-            addLog('Legacy architecture diagram rendered.', 'success');
-          } else {
-            addLog('Diagram generation failed (Quota/Permission).', 'error');
-          }
-        } else {
-          addLog('Skipping diagram: API Key required.', 'warning');
-        }
-      }
-
-      // 4. Return to IDLE state to await user confirmation
-      setState((prev) => ({ ...prev, status: AgentStatus.IDLE }));
-    } catch (e: unknown) {
-      const errorMessage = e instanceof Error ? e.message : String(e);
-      addLog(`Fatal Error: ${errorMessage}`, 'error');
-      setState((prev) => ({ ...prev, status: AgentStatus.ERROR }));
-    }
-  };
-
-  const handleConfigConfirm = () => {
-    setShowConfigModal(false);
-    startMigration();
-  };
-
-  const startMigration = async () => {
-    if (!state.analysis || !state.config) return;
-
-    setState((prev) => ({ ...prev, status: AgentStatus.CONVERTING }));
-
-    // 4. Ingest Source Code for Context (Smart Context)
-    addLog('Ingesting key legacy source files for context (Max 50)...', 'info');
-
-    // Filter generic files
-    const candidateFiles = flattenFiles(state.files).filter(
-      (f) =>
-        f.type === 'file' &&
-        !f.name.endsWith('.md') &&
-        !f.name.endsWith('.json') &&
-        !f.name.endsWith('.lock') &&
-        !isImageFile(f.name),
-    );
-
-    // Take top 50 files for broader context (Gemini 1.5 Pro can handle it)
-    const filesToRead = candidateFiles.slice(0, 50);
-
-    let context = '';
-    const fileContents: Record<string, string> = {};
-
-    for (const f of filesToRead) {
-      try {
-        const content = await fetchFileContent(state.url, f.path);
-        context += `\n\n--- FILE: ${f.path} ---\n${content}`;
-        fileContents[f.path] = content;
-
-        // Update local file tree with content so checkmarks appear?
-        // No, keep that separate or we get too many updates.
-        // But we DO need to put it in state for the Graph builder to work?
-        // Actually buildDependencyGraph takes FileNode[], so we should populate their content.
-        f.content = content;
-      } catch (_e) {
-        console.warn(`Failed to read ${f.path}`);
-      }
-    }
-    setState((prev) => ({ ...prev, sourceContext: context }));
-    addLog(
-      `Smart Context loaded: ${context.length} chars from ${filesToRead.length} files.`,
-      'success',
-    );
-
-    // Build Dependency Graph from the files we read
-    addLog('Building Dependency Graph...', 'info');
-    // We need to create a list of FileNodes that HAVE content
-    const filesWithContent = filesToRead.map((f) => ({
-      ...f,
-      content: fileContents[f.path],
-    }));
-    const graph = buildDependencyGraph(filesWithContent);
-    addLog(
-      `Dependency Graph built with ${Object.keys(graph).length} nodes.`,
-      'success',
-    );
-
-    // 5. Generate New Project Structure
-    addLog(
-      `Designing Next.js 16.1 App Router project structure (${state.config.uiFramework}, ${state.config.stateManagement}, ${state.config.testingLibrary !== 'none' ? 'with tests' : 'no tests'})...`,
-      'info',
-    );
-    const newFilePaths = await generateProjectStructure(
-      state.analysis.summary,
-      state.config,
-      state.config.testingLibrary !== 'none',
-    );
-
-    const newFileNodes = buildTreeFromPaths(newFilePaths);
-    setState((prev) => ({
-      ...prev,
-      generatedFiles: newFileNodes,
-      activeTree: 'target', // Switch view to target
-      status: AgentStatus.CONVERTING,
-    }));
-    addLog(
-      `Project scaffolded: ${newFilePaths.length} files created.`,
-      'success',
-    );
-
-    // 6. Generate Content for New Files
-    const flatTargetFiles = flattenFiles(newFileNodes).filter(
-      (f) => f.type === 'file',
-    );
-
-    for (const file of flatTargetFiles) {
-      updateFileStatus(file.path, 'migrating', 'target');
-      // Auto select the file being generated
-      setState((prev) => ({ ...prev, selectedFile: file.path }));
-
-      addLog(`Generating ${file.path}...`, 'info');
-
-      try {
-        // Try to find a matching source file to get specific related context
-        // E.g. apps/web/components/Header.tsx -> search for "Header" in source files
-        const targetNameNoExt = file.name.split('.')[0];
-        let relatedContext = '';
-
-        // Find source file that matches name
-        const matchingSource = filesToRead.find((f) => {
-          const sourceNameNoExt = f.name.split('.')[0];
-          return (
-            sourceNameNoExt.toLowerCase() === targetNameNoExt.toLowerCase()
-          );
-        });
-
-        if (matchingSource) {
-          const deps = getRelatedFiles(matchingSource.path, graph, 5);
-          if (deps.length > 0) {
-            relatedContext = deps
-              .map((depPath) => {
-                return `\n\n--- RELATED FILE: ${depPath} ---\n${fileContents[depPath] || ''}`;
-              })
-              .join('\n');
-          }
-        }
-
-        const content = await generateNextJsFile(
-          file.path,
-          context,
-          relatedContext,
-          state.config,
-        );
-        updateFileContent(file.path, content, 'target');
-        updateFileStatus(file.path, 'done', 'target');
-      } catch (_e) {
-        updateFileStatus(file.path, 'error', 'target');
-        addLog(`Failed to generate ${file.path}`, 'error');
-      }
-    }
-
-    // 7. Generate Report
-    const endTime = Date.now();
-    const report = generateReport(
-      state.files,
-      newFileNodes,
-      state.startTime || Date.now(),
-      endTime,
-      state.analysis,
-    );
-
-    setState((prev) => ({ ...prev, status: AgentStatus.COMPLETED, report }));
-    setShowReport(true);
-    addLog('Migration Complete. System Ready.', 'success');
-  };
-
-  const handleDownload = async () => {
-    if (state.generatedFiles.length === 0) return;
-
-    const zip = new JSZip();
-
-    // Recursive function to add files to zip
-    const addNodeToZip = (nodes: FileNode[], folder: JSZip) => {
-      nodes.forEach((node) => {
-        if (node.type === 'dir' && node.children) {
-          const newFolder = folder.folder(node.name);
-          if (newFolder) addNodeToZip(node.children, newFolder);
-        } else if (node.type === 'file') {
-          // If content is missing, we add a placeholder
-          const content =
-            node.content || '// File content generation failed or pending.';
-          folder.file(node.name, content);
-        }
-      });
-    };
-
-    addNodeToZip(state.generatedFiles, zip);
-
-    try {
-      const content = await zip.generateAsync({ type: 'blob' });
-      const url = window.URL.createObjectURL(content);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'nextjs-dust-off.zip';
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-      addLog('Project downloaded successfully.', 'success');
-    } catch (e: unknown) {
-      addLog('Failed to zip project files.', 'error');
-      console.error(e);
-    }
-  };
-
-  const handleFileSelect = async (path: string) => {
-    setState((prev) => ({ ...prev, selectedFile: path }));
-
-    // Check if content needs to be fetched for the source tree
-    if (state.activeTree === 'source') {
-      const node = flattenFiles(state.files).find((f) => f.path === path);
-      // Only fetch if content is undefined
-      if (node && node.content === undefined && node.type === 'file') {
-        try {
-          const content = await fetchFileContent(state.url, path);
-          updateFileContent(path, content, 'source');
-        } catch (e: unknown) {
-          const errorMessage = e instanceof Error ? e.message : String(e);
-          updateFileContent(
-            path,
-            `// Error loading content for ${path}\n// ${errorMessage}`,
-            'source',
-          );
-        }
-      }
-    }
-  };
-
-  const getSelectedFileData = () => {
-    if (!state.selectedFile) return null;
-    const tree =
-      state.activeTree === 'source' ? state.files : state.generatedFiles;
-    return flattenFiles(tree).find((f) => f.path === state.selectedFile);
-  };
-
-  const selectedNode = getSelectedFileData();
-  const isAnalyzed = !!state.analysis;
-  const isWorking =
-    state.status !== AgentStatus.IDLE &&
-    state.status !== AgentStatus.COMPLETED &&
-    state.status !== AgentStatus.ERROR;
-  const isBusy =
-    state.status === AgentStatus.ANALYZING ||
-    state.status === AgentStatus.CONVERTING;
+  const {
+    state,
+    isDiagramOpen,
+    setIsDiagramOpen,
+    showReport,
+    setShowReport,
+    showConfigModal,
+    setShowConfigModal,
+    isAnalyzed,
+    isWorking,
+    isBusy,
+    selectedNode,
+    setUrl,
+    setConfig,
+    setActiveTree,
+    startRepoProcess,
+    handleConfigConfirm,
+    handleDownload,
+    handleFileSelect,
+  } = useRepoMigration();
 
   return (
     <>
       <div className="flex flex-col gap-6 h-full overflow-hidden">
-        {/* Top Control Panel with Integrated Analysis */}
         <div className="bg-dark-800 p-4 rounded-xl border border-dark-700 flex flex-col gap-4 shrink-0 shadow-lg">
-          {/* Row 1: Input & Examples */}
           <div className="flex flex-col gap-2 w-full">
-            {/* Examples */}
             <div className="flex items-center gap-3 text-xs mb-1">
               <span className="text-gray-500 font-medium uppercase tracking-wider">
                 Try an example:
               </span>
 
-              {/* PHP Example */}
               <div className="flex items-center rounded-md bg-dark-900 border border-dark-600 overflow-hidden transition-colors hover:border-accent-500/50">
                 <button
                   onClick={() =>
-                    setState((prev) => ({
-                      ...prev,
-                      url: 'https://github.com/lassestilvang/example-php-github-copilot-cli-challenge',
-                    }))
+                    setUrl(
+                      'https://github.com/lassestilvang/example-php-github-copilot-cli-challenge',
+                    )
                   }
                   disabled={isBusy}
                   className="flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-dark-800 transition-colors text-gray-300 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
@@ -670,14 +101,12 @@ const RepoMigration: React.FC = () => {
                 </a>
               </div>
 
-              {/* Vue Example */}
               <div className="flex items-center rounded-md bg-dark-900 border border-dark-600 overflow-hidden transition-colors hover:border-accent-500/50">
                 <button
                   onClick={() =>
-                    setState((prev) => ({
-                      ...prev,
-                      url: 'https://github.com/lassestilvang/example-create-vue',
-                    }))
+                    setUrl(
+                      'https://github.com/lassestilvang/example-create-vue',
+                    )
                   }
                   disabled={isBusy}
                   className="flex items-center gap-1.5 px-2.5 py-1.5 hover:bg-dark-800 transition-colors text-gray-300 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
@@ -707,9 +136,7 @@ const RepoMigration: React.FC = () => {
                 data-1p-ignore
                 data-lpignore="true"
                 value={state.url}
-                onChange={(e) =>
-                  setState((prev) => ({ ...prev, url: e.target.value }))
-                }
+                onChange={(event) => setUrl(event.target.value)}
                 disabled={isBusy}
                 placeholder="https://github.com/username/repository"
                 className={`
@@ -729,11 +156,10 @@ const RepoMigration: React.FC = () => {
             )}
           </div>
 
-          {/* Row 2: Controls */}
           <div className="flex flex-col md:flex-row gap-4 items-center justify-between">
             <div className="flex flex-col md:flex-row items-center gap-3 w-full md:w-auto">
               <button
-                onClick={startRepoProcess}
+                onClick={() => void startRepoProcess()}
                 disabled={isBusy || !state.url}
                 className={`
                         flex items-center justify-center gap-2 py-2 px-4 rounded-lg font-bold text-sm transition-all whitespace-nowrap w-full md:w-auto
@@ -765,11 +191,10 @@ const RepoMigration: React.FC = () => {
 
               <div className="h-6 w-px bg-dark-600 hidden md:block" />
 
-              {/* Build / Download Button Logic */}
               {state.status === AgentStatus.COMPLETED ? (
                 <>
                   <button
-                    onClick={handleDownload}
+                    onClick={() => void handleDownload()}
                     className="flex items-center justify-center gap-2 py-2 px-6 rounded-lg font-bold text-sm transition-all whitespace-nowrap w-full md:w-auto bg-green-600 hover:bg-green-500 text-white shadow-[0_0_15px_rgba(34,197,94,0.4)] animate-in fade-in zoom-in-95"
                   >
                     <Download className="w-4 h-4" />
@@ -808,20 +233,16 @@ const RepoMigration: React.FC = () => {
                     : 'Configure & Build'}
                 </button>
               )}
-              {/* Migration Config Modal */}
-              {showConfigModal && state.config && (
+              {showConfigModal && (
                 <MigrationConfigModal
                   config={state.config}
-                  onChange={(newConfig) =>
-                    setState((prev) => ({ ...prev, config: newConfig }))
-                  }
+                  onChange={setConfig}
                   onConfirm={handleConfigConfirm}
                   onCancel={() => setShowConfigModal(false)}
                 />
               )}
             </div>
 
-            {/* Status Badge */}
             <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-dark-950 border border-dark-700 shadow-inner min-w-[130px] justify-center">
               <div
                 className={`w-2 h-2 rounded-full ${isWorking ? 'bg-red-500 animate-pulse' : 'bg-gray-600'}`}
@@ -834,10 +255,8 @@ const RepoMigration: React.FC = () => {
             </div>
           </div>
 
-          {/* Row 3: Integrated Analysis & Diagram (Conditional) */}
           {state.analysis && (
             <div className="mt-2 pt-4 border-t border-dark-700 flex flex-col md:flex-row gap-6 animate-in fade-in slide-in-from-top-2">
-              {/* Summary Text & Badges */}
               <div className="flex-1 min-w-0 flex flex-col gap-3">
                 <div className="flex flex-wrap items-center gap-4">
                   <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-dark-900 border border-dark-600">
@@ -854,7 +273,6 @@ const RepoMigration: React.FC = () => {
                     </span>
                   </div>
 
-                  {/* Inferred Complexity Badge */}
                   <div
                     className={`
                                 flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-mono border uppercase tracking-wide
@@ -873,7 +291,6 @@ const RepoMigration: React.FC = () => {
                 </p>
               </div>
 
-              {/* Diagram Thumbnail */}
               <div className="shrink-0 relative">
                 {state.diagram ? (
                   <div
@@ -918,12 +335,10 @@ const RepoMigration: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 min-h-0">
-          {/* Column 1: Agent Logs (Left on Desktop, Bottom on Mobile) */}
           <div className="lg:col-span-4 flex flex-col h-full min-h-0 order-3 lg:order-1">
             <AgentLogs logs={state.logs} />
           </div>
 
-          {/* Column 2: File Tree (Middle on Desktop, Top on Mobile) */}
           <div className="lg:col-span-2 flex flex-col h-full min-h-0 order-1 lg:order-2">
             <FileExplorer
               files={
@@ -933,14 +348,11 @@ const RepoMigration: React.FC = () => {
               }
               selectedFile={state.selectedFile}
               activeTree={state.activeTree}
-              onToggleTree={(mode) =>
-                setState((prev) => ({ ...prev, activeTree: mode }))
-              }
-              onSelectFile={handleFileSelect}
+              onToggleTree={setActiveTree}
+              onSelectFile={(path) => void handleFileSelect(path)}
             />
           </div>
 
-          {/* Column 3: Main Content (Right on Desktop, Middle on Mobile) */}
           <div className="lg:col-span-6 flex flex-col h-full min-h-0 order-2 lg:order-3">
             <div className="flex-1 bg-dark-800 rounded-xl border border-dark-700 overflow-hidden relative min-h-0 shadow-lg flex flex-col h-full">
               {selectedNode && selectedNode.type === 'file' ? (
@@ -1022,7 +434,6 @@ const RepoMigration: React.FC = () => {
         </div>
       </div>
 
-      {/* Fullscreen Diagram Modal */}
       {isDiagramOpen && state.diagram && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm animate-in fade-in duration-200 p-4 sm:p-8">
           <div className="absolute top-4 right-4 z-50">
@@ -1047,12 +458,11 @@ const RepoMigration: React.FC = () => {
         </div>
       )}
 
-      {/* Post-Migration Report Modal */}
       {showReport && state.report && (
         <MigrationReportModal
           report={state.report}
           onClose={() => setShowReport(false)}
-          onDownload={handleDownload}
+          onDownload={() => void handleDownload()}
         />
       )}
     </>

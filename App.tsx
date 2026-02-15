@@ -64,7 +64,6 @@ const App: React.FC = () => {
 
           <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-4 bg-dark-800/40 p-4">
             <div className="text-left flex-1">
-
               <h2 className="text-lg font-bold tracking-tight flex items-center gap-2 font-display">
                 <span className="text-white">Dust off your legacy code.</span>
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-accent-400 to-accent-600">
