@@ -1,4 +1,3 @@
-
 export enum AgentStatus {
   IDLE = 'IDLE',
   ANALYZING = 'ANALYZING',
@@ -6,7 +5,7 @@ export enum AgentStatus {
   CONVERTING = 'CONVERTING',
   VERIFYING = 'VERIFYING',
   COMPLETED = 'COMPLETED',
-  ERROR = 'ERROR'
+  ERROR = 'ERROR',
 }
 
 export interface AnalysisResult {

@@ -32,18 +32,21 @@ _Coming soon_
 ### Installation
 
 1. Clone the repository:
+
    ```bash
    git clone https://github.com/lassestilvang/dust-off.git
    cd dust-off
    ```
 
 2. Install dependencies:
+
    ```bash
    bun install
    ```
 
 3. Set up environment variables:
    Create a `.env.local` file in the root directory and add your API key:
+
    ```env
    GEMINI_API_KEY=your_api_key_here
    ```

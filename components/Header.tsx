@@ -3,7 +3,9 @@ import { Bot, Terminal, HelpCircle, BookOpen } from 'lucide-react';
 import InfoModal from './InfoModal';
 
 const Header: React.FC = () => {
-  const [infoModal, setInfoModal] = useState<'about' | 'how-it-works' | null>(null);
+  const [infoModal, setInfoModal] = useState<'about' | 'how-it-works' | null>(
+    null,
+  );
 
   return (
     <>
@@ -20,7 +22,9 @@ const Header: React.FC = () => {
               <h1 className="text-xl font-bold bg-gradient-to-r from-white to-gray-400 bg-clip-text text-transparent">
                 DustOff
               </h1>
-              <p className="text-xs text-gray-400 font-mono tracking-wider">AUTONOMOUS MIGRATION AGENT</p>
+              <p className="text-xs text-gray-400 font-mono tracking-wider">
+                AUTONOMOUS MIGRATION AGENT
+              </p>
             </div>
           </div>
 

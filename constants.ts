@@ -1,4 +1,3 @@
-
 export const DEFAULT_SOURCE_CODE = `// Example: Legacy jQuery to React Migration
 $(document).ready(function() {
   var count = 0;
