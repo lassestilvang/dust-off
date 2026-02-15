@@ -1,6 +1,6 @@
 import React from 'react';
 import { MigrationConfig } from '../types';
-import { Check, Grid, Layers, TestTube, Palette, Database } from 'lucide-react';
+import { Check, Grid, Layers, TestTube, Palette, Database, X } from 'lucide-react';
 
 interface MigrationConfigProps {
   config: MigrationConfig;
@@ -26,10 +26,9 @@ const ConfigOption = ({
     onClick={onClick}
     className={`
       flex flex-col items-start p-4 rounded-xl border transition-all duration-200 text-left w-full h-full relative overflow-hidden group
-      ${
-        selected
-          ? 'bg-accent-900/20 border-accent-500/50 shadow-[0_0_15px_rgba(245,158,11,0.1)]'
-          : 'bg-dark-800 border-dark-700 hover:border-dark-600 hover:bg-dark-750'
+      ${selected
+        ? 'bg-accent-900/20 border-accent-500/50 shadow-[0_0_15px_rgba(245,158,11,0.1)]'
+        : 'bg-dark-800 border-dark-700 hover:border-dark-600 hover:bg-dark-750'
       }
     `}
   >
@@ -160,6 +159,13 @@ const MigrationConfigModal: React.FC<MigrationConfigProps> = ({
                 description="Classic, widely adopted testing framework. Good for legacy compatibility."
                 selected={config.testingLibrary === 'jest'}
                 onClick={() => updateConfig('testingLibrary', 'jest')}
+              />
+              <ConfigOption
+                label="None"
+                icon={X}
+                description="Skip test generation. Faster migration, but less safe."
+                selected={config.testingLibrary === 'none'}
+                onClick={() => updateConfig('testingLibrary', 'none')}
               />
             </div>
           </section>

@@ -19,7 +19,7 @@ export interface AnalysisResult {
 export interface MigrationConfig {
   uiFramework: 'tailwind' | 'shadcn';
   stateManagement: 'context' | 'zustand' | 'redux';
-  testingLibrary: 'vitest' | 'jest';
+  testingLibrary: 'vitest' | 'jest' | 'none';
 }
 
 export interface RepoAnalysisResult extends AnalysisResult {

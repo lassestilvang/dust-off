@@ -219,7 +219,6 @@ const RepoMigration: React.FC = () => {
     },
   });
 
-  const [includeTests, setIncludeTests] = useState(false);
   const [isDiagramOpen, setIsDiagramOpen] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
@@ -468,13 +467,13 @@ const RepoMigration: React.FC = () => {
 
     // 5. Generate New Project Structure
     addLog(
-      `Designing Next.js 16.1 App Router project structure (${state.config.uiFramework}, ${state.config.stateManagement})...`,
+      `Designing Next.js 16.1 App Router project structure (${state.config.uiFramework}, ${state.config.stateManagement}, ${state.config.testingLibrary !== 'none' ? 'with tests' : 'no tests'})...`,
       'info',
     );
     const newFilePaths = await generateProjectStructure(
       state.analysis.summary,
       state.config,
-      includeTests,
+      state.config.testingLibrary !== 'none',
     );
 
     const newFileNodes = buildTreeFromPaths(newFilePaths);
@@ -735,11 +734,10 @@ const RepoMigration: React.FC = () => {
                 disabled={isBusy || !state.url}
                 className={`
                         flex items-center justify-center gap-2 py-2 px-4 rounded-lg font-bold text-sm transition-all whitespace-nowrap w-full md:w-auto
-                        ${
-                          !isAnalyzed && state.url
-                            ? 'bg-accent-600 hover:bg-accent-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.3)]'
-                            : 'bg-dark-700 hover:bg-dark-600 text-gray-300 border border-dark-600'
-                        }
+                        ${!isAnalyzed && state.url
+                    ? 'bg-accent-600 hover:bg-accent-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.3)]'
+                    : 'bg-dark-700 hover:bg-dark-600 text-gray-300 border border-dark-600'
+                  }
                         ${state.status === AgentStatus.ANALYZING || !state.url ? 'opacity-70 cursor-not-allowed' : ''}
                         `}
               >
@@ -789,11 +787,10 @@ const RepoMigration: React.FC = () => {
                   }
                   className={`
                             flex items-center justify-center gap-2 py-2 px-6 rounded-lg font-bold text-sm transition-all whitespace-nowrap w-full md:w-auto
-                            ${
-                              isAnalyzed
-                                ? 'bg-accent-600 hover:bg-accent-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.3)] animate-in fade-in zoom-in-95'
-                                : 'bg-dark-800 text-gray-600 cursor-not-allowed border border-dark-700'
-                            }
+                            ${isAnalyzed
+                      ? 'bg-accent-600 hover:bg-accent-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.3)] animate-in fade-in zoom-in-95'
+                      : 'bg-dark-800 text-gray-600 cursor-not-allowed border border-dark-700'
+                    }
                             `}
                 >
                   {state.status === AgentStatus.CONVERTING ? (
@@ -818,33 +815,6 @@ const RepoMigration: React.FC = () => {
                 />
               )}
 
-              <label
-                title="Include Vitest/React Testing Library unit tests for components"
-                className={`
-                        flex items-center gap-2 text-sm cursor-pointer select-none transition-opacity
-                        ${isAnalyzed ? 'opacity-100' : 'opacity-50 pointer-events-none'}
-                    `}
-              >
-                <div
-                  className={`
-                            w-5 h-5 rounded border flex items-center justify-center transition-colors
-                            ${includeTests ? 'bg-accent-600 border-accent-500' : 'bg-dark-900 border-dark-600'}
-                        `}
-                >
-                  {includeTests && <Check className="w-3.5 h-3.5 text-white" />}
-                </div>
-                <input
-                  type="checkbox"
-                  checked={includeTests}
-                  onChange={(e) => setIncludeTests(e.target.checked)}
-                  disabled={!isAnalyzed}
-                  className="hidden"
-                />
-                <span className="text-gray-300 flex items-center gap-1.5">
-                  <TestTube className="w-3.5 h-3.5" />
-                  Generate Tests
-                </span>
-              </label>
             </div>
 
             {/* Status Badge */}
@@ -923,7 +893,7 @@ const RepoMigration: React.FC = () => {
                 ) : (
                   <div className="w-48 h-28 bg-dark-900 rounded-lg border border-dark-600 border-dashed flex flex-col items-center justify-center text-gray-500 gap-2">
                     {state.status === AgentStatus.ANALYZING ||
-                    state.status === AgentStatus.PLANNING ? (
+                      state.status === AgentStatus.PLANNING ? (
                       <>
                         <Loader2 className="w-5 h-5 animate-spin text-accent-500" />
                         <span className="text-xs">Generating Diagram...</span>
