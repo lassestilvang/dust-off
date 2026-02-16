@@ -1,4 +1,4 @@
-import { handleGeminiProxyRequest } from '../server/geminiProxy';
+import { handleGeminiProxyRequest } from './_lib/geminiProxy.js';
 
 const handler = async (
   req: import('node:http').IncomingMessage & { body?: unknown },

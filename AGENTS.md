@@ -114,7 +114,7 @@ All commands below were run and verified.
 - `components/SnippetMigration.tsx`: snippet conversion flow.
 - `services/geminiService.ts`: Gemini API wrappers, retries, generation/analyze/verify calls.
 - `api/gemini.ts`: Vercel serverless endpoint for Gemini proxying.
-- `server/geminiProxy.ts`: shared server-only Gemini proxy logic (used by API route + Vite dev middleware).
+- `api/_lib/geminiProxy.ts`: shared server-only Gemini proxy logic (used by API route + Vite dev middleware).
 - `services/githubService.ts`: GitHub URL parsing, repo tree/file content fetching.
 - `constants.ts`: all model prompt templates and default source snippet.
 - `types.ts`: shared domain types and enums.
