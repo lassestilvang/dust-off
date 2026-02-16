@@ -9,6 +9,7 @@ import {
 } from 'vitest';
 import {
   parseGitHubUrl,
+  normalizeGitHubRepoUrl,
   fetchRepoStructure,
   fetchFileContent,
 } from './githubService';
@@ -38,12 +39,49 @@ describe('githubService', () => {
         repo: 'repo',
         branch: 'main',
       });
+      expect(parseGitHubUrl('https://github.com/owner/repo.git')).toEqual({
+        owner: 'owner',
+        repo: 'repo',
+        branch: 'main',
+      });
+      expect(
+        parseGitHubUrl('https://github.com/owner/repo/tree/main/src'),
+      ).toEqual({
+        owner: 'owner',
+        repo: 'repo',
+        branch: 'main',
+      });
     });
 
     it('returns null for invalid URLs', () => {
       expect(parseGitHubUrl('https://google.com')).toBeNull();
       expect(parseGitHubUrl('invalid-url')).toBeNull();
       expect(parseGitHubUrl('https://github.com/owner')).toBeNull(); // Missing repo
+    });
+  });
+
+  describe('normalizeGitHubRepoUrl', () => {
+    it('normalizes valid GitHub URLs into canonical repository URLs', () => {
+      expect(normalizeGitHubRepoUrl('github.com/owner/repo')).toBe(
+        'https://github.com/owner/repo',
+      );
+      expect(normalizeGitHubRepoUrl('https://github.com/owner/repo/')).toBe(
+        'https://github.com/owner/repo',
+      );
+      expect(
+        normalizeGitHubRepoUrl('https://github.com/owner/repo/tree/main/src'),
+      ).toBe('https://github.com/owner/repo');
+      expect(normalizeGitHubRepoUrl('https://github.com/owner/repo.git')).toBe(
+        'https://github.com/owner/repo',
+      );
+    });
+
+    it('returns null for non-GitHub or malformed repository URLs', () => {
+      expect(
+        normalizeGitHubRepoUrl('https://example.com/owner/repo'),
+      ).toBeNull();
+      expect(normalizeGitHubRepoUrl('https://github.com/owner')).toBeNull();
+      expect(normalizeGitHubRepoUrl('')).toBeNull();
     });
   });
 

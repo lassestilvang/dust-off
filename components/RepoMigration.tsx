@@ -31,6 +31,7 @@ import MigrationConfigModal from './MigrationConfig';
 import { NextjsIcon, ReactIcon, VueIcon, PythonIcon, PhpIcon } from './Icons';
 import { AgentStatus, FileNode } from '../types';
 import { useRepoMigration, isImageFile } from '../hooks/useRepoMigration';
+import { normalizeGitHubRepoUrl } from '../services/githubService';
 
 const flattenFilePaths = (nodes: FileNode[]): string[] => {
   const filePaths: string[] = [];
@@ -126,6 +127,15 @@ const RepoMigration: React.FC = () => {
     !isImageFile(selectedNode.name) &&
     selectedNode.content,
   );
+  const trimmedRepoUrl = state.url.trim();
+  const normalizedRepoUrl = React.useMemo(
+    () => normalizeGitHubRepoUrl(state.url),
+    [state.url],
+  );
+  const isRepoUrlValid = Boolean(normalizedRepoUrl);
+  const showRepoUrlError = trimmedRepoUrl.length > 0 && !isRepoUrlValid;
+  const isAnalyzeDisabled =
+    isBusy || trimmedRepoUrl.length === 0 || !isRepoUrlValid;
 
   const copyGeneratedCode = React.useCallback(async () => {
     if (
@@ -182,6 +192,19 @@ const RepoMigration: React.FC = () => {
     };
   }, [copyStatus]);
 
+  const handleRepoUrlBlur = React.useCallback(() => {
+    if (normalizedRepoUrl && normalizedRepoUrl !== state.url) {
+      setUrl(normalizedRepoUrl);
+    }
+  }, [normalizedRepoUrl, setUrl, state.url]);
+
+  const handleAnalyzeClick = React.useCallback(() => {
+    if (isAnalyzeDisabled) {
+      return;
+    }
+    void startRepoProcess();
+  }, [isAnalyzeDisabled, startRepoProcess]);
+
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement | null;
@@ -214,7 +237,7 @@ const RepoMigration: React.FC = () => {
       if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
         event.preventDefault();
 
-        if (isBusy || !state.url) {
+        if (isBusy || trimmedRepoUrl.length === 0 || !isRepoUrlValid) {
           return;
         }
 
@@ -293,6 +316,7 @@ const RepoMigration: React.FC = () => {
     handleFileSelect,
     isAnalyzed,
     isBusy,
+    isRepoUrlValid,
     isDiagramOpen,
     setActiveTree,
     setIsDiagramOpen,
@@ -304,7 +328,7 @@ const RepoMigration: React.FC = () => {
     state.generatedFiles.length,
     state.selectedFile,
     state.status,
-    state.url,
+    trimmedRepoUrl.length,
   ]);
 
   return (
@@ -377,14 +401,28 @@ const RepoMigration: React.FC = () => {
                 data-lpignore="true"
                 value={state.url}
                 onChange={(event) => setUrl(event.target.value)}
+                onBlur={handleRepoUrlBlur}
                 disabled={isBusy}
                 placeholder="https://github.com/username/repository"
+                inputMode="url"
+                aria-invalid={showRepoUrlError}
                 className={`
                             w-full bg-dark-900 border rounded-lg pl-10 pr-4 py-3 text-gray-200 focus:outline-none transition-colors
-                            ${state.status === AgentStatus.ERROR ? 'border-red-500/50 focus:border-red-500' : 'border-dark-600 focus:border-accent-500'}
+                            ${state.status === AgentStatus.ERROR || showRepoUrlError ? 'border-red-500/50 focus:border-red-500' : 'border-dark-600 focus:border-accent-500'}
                         `}
               />
             </div>
+            {showRepoUrlError && (
+              <p className="text-xs text-red-300">
+                Enter a GitHub repository URL like
+                {' https://github.com/owner/repo'}.
+              </p>
+            )}
+            {!showRepoUrlError && (
+              <p className="text-xs text-gray-500">
+                Paste any GitHub repository link. We will normalize it for you.
+              </p>
+            )}
             {state.status === AgentStatus.ERROR && (
               <div className="flex items-center gap-2 p-3 rounded-lg bg-red-900/20 border border-red-500/30 text-red-200 text-sm animate-in fade-in slide-in-from-top-2">
                 <AlertCircle className="w-4 h-4 shrink-0 text-red-400" />
@@ -508,16 +546,16 @@ const RepoMigration: React.FC = () => {
           <div className="flex flex-col lg:flex-row gap-4 items-center justify-between">
             <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3 w-full md:w-auto">
               <button
-                onClick={() => void startRepoProcess()}
-                disabled={isBusy || !state.url}
+                onClick={handleAnalyzeClick}
+                disabled={isAnalyzeDisabled}
                 className={`
                         flex items-center justify-center gap-2 py-2 px-4 rounded-lg font-bold text-sm transition-all whitespace-nowrap w-full md:w-auto
                         ${
-                          !isAnalyzed && state.url
+                          !isAnalyzed && !isAnalyzeDisabled
                             ? 'bg-accent-600 hover:bg-accent-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.3)]'
                             : 'bg-dark-700 hover:bg-dark-600 text-gray-300 border border-dark-600'
                         }
-                        ${state.status === AgentStatus.ANALYZING || !state.url ? 'opacity-70 cursor-not-allowed' : ''}
+                        ${isAnalyzeDisabled ? 'opacity-70 cursor-not-allowed' : ''}
                         `}
               >
                 {state.status === AgentStatus.ANALYZING ? (

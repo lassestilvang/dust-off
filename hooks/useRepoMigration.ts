@@ -18,7 +18,10 @@ import {
   RepoScopeInfo,
   RepoState,
 } from '../types';
-import { fetchFileContent } from '../services/githubService';
+import {
+  fetchFileContent,
+  normalizeGitHubRepoUrl,
+} from '../services/githubService';
 import {
   flattenFiles,
   generateReport,
@@ -575,10 +578,18 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
 
   const startRepoProcess = useCallback(async () => {
     const { url, includeDirectories, excludeDirectories } = stateRef.current;
+    const normalizedUrl = normalizeGitHubRepoUrl(url);
 
-    if (!url) {
-      addLog('Please enter a valid GitHub URL.', 'error');
+    if (!normalizedUrl) {
+      addLog(
+        'Please enter a valid GitHub repository URL (https://github.com/owner/repo).',
+        'error',
+      );
       return;
+    }
+
+    if (normalizedUrl !== url) {
+      dispatch({ type: 'set_url', payload: normalizedUrl });
     }
 
     dispatch({ type: 'reset_for_analysis' });
@@ -600,7 +611,7 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
       );
 
       const result = await runAnalyzePhase({
-        url,
+        url: normalizedUrl,
         includeDirectories,
         excludeDirectories,
         addLog,

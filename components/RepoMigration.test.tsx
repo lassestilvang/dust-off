@@ -186,6 +186,45 @@ describe('RepoMigration', () => {
     });
   });
 
+  it('shows inline validation and disables analysis for non-GitHub URLs', () => {
+    render(<RepoMigration />);
+
+    fireEvent.change(
+      screen.getByPlaceholderText('https://github.com/username/repository'),
+      {
+        target: { value: 'https://gitlab.com/example-org/legacy-app' },
+      },
+    );
+
+    expect(
+      screen.getByText(
+        /Enter a GitHub repository URL like\s+https:\/\/github\.com\/owner\/repo\./i,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Analyze Repo/i }),
+    ).toBeDisabled();
+    expect(mockValidateGeminiApiKey).not.toHaveBeenCalled();
+  });
+
+  it('normalizes valid GitHub URLs on blur', async () => {
+    render(<RepoMigration />);
+
+    const input = screen.getByPlaceholderText(
+      'https://github.com/username/repository',
+    ) as HTMLInputElement;
+
+    fireEvent.change(input, {
+      target: { value: 'github.com/example-org/legacy-app/' },
+    });
+    fireEvent.blur(input);
+
+    await waitFor(() => {
+      expect(input.value).toBe('https://github.com/example-org/legacy-app');
+    });
+    expect(screen.getByRole('button', { name: /Analyze Repo/i })).toBeEnabled();
+  });
+
   it('analyzes a repository from the URL input', async () => {
     render(<RepoMigration />);
 

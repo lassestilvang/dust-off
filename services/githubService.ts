@@ -200,25 +200,64 @@ const getMimeType = (filename: string) => {
   }
 };
 
-export const parseGitHubUrl = (url: string) => {
-  try {
-    // Handle missing protocol
-    let fullUrl = url;
-    if (!url.startsWith('http://') && !url.startsWith('https://')) {
-      fullUrl = 'https://' + url;
-    }
+const GITHUB_HOSTNAMES = new Set(['github.com', 'www.github.com']);
+const GITHUB_OWNER_REGEX = /^[A-Za-z\d](?:[A-Za-z\d-]{0,37}[A-Za-z\d])?$/;
+const GITHUB_REPO_REGEX = /^[A-Za-z\d._-]+$/;
 
-    const urlObj = new URL(fullUrl);
-    // Support github.com/owner/repo
-    if (
-      urlObj.hostname !== 'github.com' &&
-      urlObj.hostname !== 'www.github.com'
-    ) {
+const withProtocol = (input: string): string => {
+  if (input.startsWith('http://') || input.startsWith('https://')) {
+    return input;
+  }
+  return `https://${input}`;
+};
+
+export const normalizeGitHubRepoUrl = (url: string): string | null => {
+  const trimmed = url.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const urlObj = new URL(withProtocol(trimmed));
+    const hostname = urlObj.hostname.toLowerCase();
+    if (!GITHUB_HOSTNAMES.has(hostname)) {
       return null;
     }
 
     const parts = urlObj.pathname.split('/').filter(Boolean);
-    if (parts.length < 2) return null;
+    if (parts.length < 2) {
+      return null;
+    }
+
+    const owner = parts[0];
+    const rawRepo = parts[1];
+    const repo = rawRepo.endsWith('.git')
+      ? rawRepo.slice(0, rawRepo.length - 4)
+      : rawRepo;
+
+    if (!owner || !repo) {
+      return null;
+    }
+
+    if (!GITHUB_OWNER_REGEX.test(owner) || !GITHUB_REPO_REGEX.test(repo)) {
+      return null;
+    }
+
+    return `https://github.com/${owner}/${repo}`;
+  } catch {
+    return null;
+  }
+};
+
+export const parseGitHubUrl = (url: string) => {
+  const normalizedUrl = normalizeGitHubRepoUrl(url);
+  if (!normalizedUrl) {
+    return null;
+  }
+
+  try {
+    const urlObj = new URL(normalizedUrl);
+    const parts = urlObj.pathname.split('/').filter(Boolean);
     return {
       owner: parts[0],
       repo: parts[1],
