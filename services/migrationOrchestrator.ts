@@ -1487,11 +1487,12 @@ export const generateReport = (
   const flatTarget = flattenFiles(targetFiles);
   const flatSource = flattenFiles(sourceFiles);
 
-  const durationMs = endTime - startTime;
+  const durationMs = Math.max(0, endTime - startTime);
+  const totalSeconds = Math.max(1, Math.ceil(durationMs / 1000));
   const duration =
-    durationMs > 60000
-      ? `${Math.round(durationMs / 60000)}m ${Math.round((durationMs % 60000) / 1000)}s`
-      : `${Math.round(durationMs / 1000)}s`;
+    totalSeconds >= 60
+      ? `${Math.floor(totalSeconds / 60)}m ${totalSeconds % 60}s`
+      : `${totalSeconds}s`;
 
   const totalFiles = flatSource.filter((file) => file.type === 'file').length;
   const filesGenerated = flatTarget.filter(
