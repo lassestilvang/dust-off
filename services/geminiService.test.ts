@@ -1,43 +1,33 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { analyzeCode, generateProjectStructure } from './geminiService';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import {
+  analyzeCode,
+  generateProjectStructure,
+  validateGeminiApiKey,
+} from './geminiService';
 
-const mockGenerateContent = vi.fn();
-
-vi.mock('@google/genai', () => {
-  return {
-    GoogleGenAI: vi.fn(function () {
-      return {
-        models: {
-          generateContent: mockGenerateContent,
-        },
-      };
-    }),
-  };
-});
+const mockFetch = vi.fn();
 
 describe('geminiService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    process.env.API_KEY = 'test-api-key';
-  });
-
-  afterEach(() => {
-    delete process.env.API_KEY;
+    vi.stubGlobal('fetch', mockFetch);
   });
 
   describe('analyzeCode', () => {
     it('analyzes code successfully', async () => {
-      const mockResponse = {
-        text: JSON.stringify({
-          summary: 'Test Summary',
-          complexity: 'Low',
-          dependencies: [],
-          patterns: [],
-          risks: [],
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          text: JSON.stringify({
+            summary: 'Test Summary',
+            complexity: 'Low',
+            dependencies: [],
+            patterns: [],
+            risks: [],
+          }),
         }),
-      };
-
-      mockGenerateContent.mockResolvedValue(mockResponse);
+      });
 
       const result = await analyzeCode(
         'source code',
@@ -47,11 +37,15 @@ describe('geminiService', () => {
 
       expect(result.summary).toBe('Test Summary');
       expect(result.complexity).toBe('Low');
-      expect(mockGenerateContent).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(mockFetch).toHaveBeenCalledWith(
+        '/api/gemini',
+        expect.objectContaining({ method: 'POST' }),
+      );
     });
 
     it('handles API errors gracefully', async () => {
-      mockGenerateContent.mockRejectedValue(new Error('API Error'));
+      mockFetch.mockRejectedValue(new Error('API Error'));
 
       const result = await analyzeCode('source', 'js', 'ts');
 
@@ -63,24 +57,49 @@ describe('geminiService', () => {
   describe('generateProjectStructure', () => {
     it('generates project structure successfully', async () => {
       const mockStructure = ['package.json', 'src/index.ts'];
-      const mockResponse = {
-        text: JSON.stringify(mockStructure),
-      };
 
-      mockGenerateContent.mockResolvedValue(mockResponse);
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          text: JSON.stringify(mockStructure),
+        }),
+      });
 
-      const result = await generateProjectStructure('summary');
+      const result = await generateProjectStructure('summary', {
+        uiFramework: 'tailwind',
+        stateManagement: 'context',
+        testingLibrary: 'vitest',
+      });
 
       expect(result).toEqual(mockStructure);
     });
 
     it('returns fallback on error', async () => {
-      mockGenerateContent.mockRejectedValue(new Error('API Error'));
+      mockFetch.mockRejectedValue(new Error('API Error'));
 
-      const result = await generateProjectStructure('summary');
+      const result = await generateProjectStructure('summary', {
+        uiFramework: 'tailwind',
+        stateManagement: 'context',
+        testingLibrary: 'vitest',
+      });
 
       expect(result).toContain('package.json');
       expect(result).toContain('app/page.tsx');
+    });
+  });
+
+  describe('validateGeminiApiKey', () => {
+    it('throws a server configuration error when key is missing server-side', async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        json: async () => ({ error: 'Missing key' }),
+      });
+
+      await expect(validateGeminiApiKey()).rejects.toThrow(
+        'Gemini API key is missing on the server. Configure GEMINI_API_KEY in server environment variables.',
+      );
     });
   });
 });

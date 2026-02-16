@@ -55,7 +55,7 @@ This project uses **Vitest** for unit and component testing.
    ```
 
 3. Set up environment variables:
-   Create a `.env.local` file in the root directory and add your API key:
+   Create a `.env.local` file in the root directory and add your API key. The key is used server-side via `/api/gemini` and is not exposed to the browser bundle:
 
    ```env
    GEMINI_API_KEY=your_api_key_here

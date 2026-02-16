@@ -27,7 +27,6 @@ const CODE_RAIN_CHARS = [
 type ThemeMode = 'dark' | 'light';
 
 const THEME_STORAGE_KEY = 'dustoff-theme';
-const hasConfiguredGeminiApiKey = Boolean(__DUSTOFF_GEMINI_API_KEY__.trim());
 
 const getInitialTheme = (): ThemeMode => {
   if (typeof window === 'undefined') {
@@ -91,19 +90,6 @@ const App: React.FC = () => {
       <Header theme={theme} onToggleTheme={toggleTheme} />
 
       <main className="relative z-10 flex-1 w-full max-w-[1600px] mx-auto px-4 py-4 flex flex-col gap-4 min-h-0">
-        {!hasConfiguredGeminiApiKey && (
-          <div
-            role="alert"
-            className="shrink-0 rounded-xl border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-100"
-          >
-            <span className="font-semibold">
-              Add your Gemini API key to get started.
-            </span>{' '}
-            Create <code className="font-mono">.env.local</code> with{' '}
-            <code className="font-mono">GEMINI_API_KEY=your_api_key_here</code>.
-          </div>
-        )}
-
         {/* Hero Section */}
         <div className="relative shrink-0 animate-in fade-in slide-in-from-top-4 duration-700 rounded-xl border border-dark-700/30 overflow-hidden">
           <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-4 bg-dark-800 p-4">
@@ -192,7 +178,7 @@ const App: React.FC = () => {
             href="https://en.wikipedia.org/wiki/Copenhagen"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-foreground-subtle hover:text-accent-400 transition-colors border-b border-transparent hover:border-accent-400/50"
+            className="text-foreground-subtle hover:text-accent-400 transition-colors underline underline-offset-2"
           >
             Copenhagen
           </a>{' '}
@@ -201,7 +187,7 @@ const App: React.FC = () => {
             href="https://github.com/features/copilot/cli"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-foreground-subtle hover:text-accent-400 transition-colors border-b border-transparent hover:border-accent-400/50"
+            className="text-foreground-subtle hover:text-accent-400 transition-colors underline underline-offset-2"
           >
             GitHub Copilot CLI
           </a>{' '}
@@ -210,7 +196,7 @@ const App: React.FC = () => {
             href="https://dev.to/challenges/github-2026-01-21"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-foreground-subtle hover:text-accent-400 transition-colors border-b border-transparent hover:border-accent-400/50"
+            className="text-foreground-subtle hover:text-accent-400 transition-colors underline underline-offset-2"
           >
             GitHub Copilot CLI Challenge
           </a>

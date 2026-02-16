@@ -41,15 +41,6 @@ import { isAbortError } from '../services/abortUtils';
 import { validateGeminiApiKey } from '../services/geminiService';
 import type { DependencyGraph } from '../services/dependencyGraph';
 
-declare global {
-  interface Window {
-    aistudio?: {
-      hasSelectedApiKey: () => Promise<boolean>;
-      openSelectKey: () => Promise<void>;
-    };
-  }
-}
-
 const initialRepoState: RepoState = {
   url: '',
   branch: 'main',
@@ -755,31 +746,13 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
   }, [addLog]);
 
   const ensureDiagramApiKey = useCallback(async (): Promise<boolean> => {
-    let hasKey = false;
-    const apiStudio = window.aistudio;
-
-    if (apiStudio) {
-      try {
-        hasKey = await apiStudio.hasSelectedApiKey();
-        if (!hasKey) {
-          addLog(
-            'Requesting API Key for visual generation...',
-            'warning',
-            AgentStatus.PLANNING,
-          );
-          await apiStudio.openSelectKey();
-          hasKey = await apiStudio.hasSelectedApiKey();
-        }
-      } catch (error: unknown) {
-        console.error('Auth flow error', error);
-      }
+    try {
+      await validateGeminiApiKey();
+      return true;
+    } catch {
+      return false;
     }
-
-    return (
-      hasKey ||
-      Boolean((process.env as Record<string, string | undefined>).API_KEY)
-    );
-  }, [addLog]);
+  }, []);
 
   const startRepoProcess = useCallback(async () => {
     const { url, includeDirectories, excludeDirectories } = stateRef.current;

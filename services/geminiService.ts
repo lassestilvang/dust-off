@@ -1,4 +1,3 @@
-import { GoogleGenAI, GenerateContentResponse } from '@google/genai';
 import {
   ANALYSIS_PROMPT_TEMPLATE,
   ANALYSIS_SYSTEM_INSTRUCTION,
@@ -25,21 +24,40 @@ import {
 } from '../types';
 import { abortIfSignaled, isAbortError } from './abortUtils';
 
-const getApiKey = () =>
-  process.env.API_KEY ||
-  (process.env as Record<string, string | undefined>).GEMINI_API_KEY ||
-  '';
-
-const createClient = () => new GoogleGenAI({ apiKey: getApiKey() });
+const GEMINI_PROXY_ENDPOINT = '/api/gemini';
 const API_KEY_VALIDATION_CACHE_TTL_MS = 10 * 60 * 1000;
 const RETRYABLE_STATUS_CODES = new Set([408, 429, 500, 502, 503, 504]);
 const NETWORK_ERROR_PATTERN =
   /network|fetch|timeout|temporar|econnreset|etimedout|enotfound|socket|eai_again|unavailable/i;
 
-let validatedApiKeyCache: { key: string; verifiedAt: number } | null = null;
+let validatedApiKeyCache: { verifiedAt: number } | null = null;
 
 interface GeminiRequestOptions {
   abortSignal?: AbortSignal;
+}
+
+interface GeminiImageConfig {
+  aspectRatio?: string;
+  imageSize?: string;
+}
+
+interface GeminiProxyConfig {
+  systemInstruction?: string;
+  responseMimeType?: string;
+  thinkingBudget?: number;
+  imageConfig?: GeminiImageConfig;
+}
+
+interface GeminiProxyResponse {
+  text?: string;
+  inlineData?: Array<{
+    mimeType: string;
+    data: string;
+  }>;
+}
+
+interface GeminiProxyError extends Error {
+  status?: number;
 }
 
 const sanitizeGeneratedCode = (raw: string): string => {
@@ -107,6 +125,59 @@ const withRetry = async <T>(
 
     throw error;
   }
+};
+
+const createGeminiProxyError = (
+  status: number,
+  message: string,
+): GeminiProxyError => {
+  const error = new Error(message) as GeminiProxyError;
+  error.status = status;
+  return error;
+};
+
+const requestGemini = async (
+  model: string,
+  contents: unknown,
+  config: GeminiProxyConfig,
+  options?: GeminiRequestOptions,
+): Promise<GeminiProxyResponse> => {
+  const response = await fetch(GEMINI_PROXY_ENDPOINT, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    signal: options?.abortSignal,
+    body: JSON.stringify({
+      model,
+      contents,
+      config,
+    }),
+  });
+
+  let payload: unknown = null;
+  try {
+    payload = await response.json();
+  } catch {
+    // Some proxy responses may not include JSON bodies.
+  }
+
+  if (!response.ok) {
+    const message =
+      typeof (payload as { error?: unknown })?.error === 'string'
+        ? (payload as { error: string }).error
+        : `Gemini proxy request failed (${response.status}).`;
+    throw createGeminiProxyError(response.status, message);
+  }
+
+  if (!payload || typeof payload !== 'object') {
+    throw createGeminiProxyError(
+      response.status,
+      'Gemini proxy returned an invalid response payload.',
+    );
+  }
+
+  return payload as GeminiProxyResponse;
 };
 
 const normalizeRepoAnalysis = (
@@ -341,41 +412,30 @@ export const validateGeminiApiKey = async (
   options?: GeminiRequestOptions,
 ): Promise<void> => {
   const abortSignal = options?.abortSignal;
-  const apiKey = getApiKey().trim();
-
-  if (!apiKey) {
-    throw new Error(
-      'Gemini API key is missing. Set GEMINI_API_KEY before starting a migration.',
-    );
-  }
 
   if (
     validatedApiKeyCache &&
-    validatedApiKeyCache.key === apiKey &&
     Date.now() - validatedApiKeyCache.verifiedAt <
       API_KEY_VALIDATION_CACHE_TTL_MS
   ) {
     return;
   }
 
-  const client = createClient();
-
   try {
     await withRetry(
       () =>
-        client.models.generateContent({
-          model: 'gemini-3-flash-preview',
-          contents: 'Respond with: OK',
-          config: {
-            abortSignal,
-            thinkingConfig: { thinkingBudget: 128 },
+        requestGemini(
+          'gemini-3-flash-preview',
+          'Respond with: OK',
+          {
+            thinkingBudget: 128,
           },
-        }),
+          options,
+        ),
       { retries: 2, baseDelay: 1000, abortSignal },
     );
 
     validatedApiKeyCache = {
-      key: apiKey,
       verifiedAt: Date.now(),
     };
   } catch (error) {
@@ -386,7 +446,14 @@ export const validateGeminiApiKey = async (
     const status = (error as { status?: number }).status;
     if (status === 401 || status === 403) {
       throw new Error(
-        'Gemini API key is invalid or unauthorized. Verify GEMINI_API_KEY and try again.',
+        'Gemini API key is invalid or unauthorized. Verify GEMINI_API_KEY on the server and try again.',
+        { cause: error },
+      );
+    }
+
+    if (status === 500) {
+      throw new Error(
+        'Gemini API key is missing on the server. Configure GEMINI_API_KEY in server environment variables.',
         { cause: error },
       );
     }
@@ -404,7 +471,6 @@ export const analyzeCode = async (
   targetLang: string,
   options?: GeminiRequestOptions,
 ): Promise<AnalysisResult> => {
-  const client = createClient();
   const abortSignal = options?.abortSignal;
   const prompt = ANALYSIS_PROMPT_TEMPLATE.replace(
     '{sourceLang}',
@@ -412,18 +478,18 @@ export const analyzeCode = async (
   ).replace('{targetLang}', targetLang);
 
   try {
-    const response = await withRetry<GenerateContentResponse>(
+    const response = await withRetry(
       () =>
-        client.models.generateContent({
-          model: 'gemini-3-pro-preview',
-          contents: prompt + '\n\nSource Code:\n' + sourceCode,
-          config: {
-            abortSignal,
+        requestGemini(
+          'gemini-3-pro-preview',
+          prompt + '\n\nSource Code:\n' + sourceCode,
+          {
             systemInstruction: ANALYSIS_SYSTEM_INSTRUCTION,
             responseMimeType: 'application/json',
-            thinkingConfig: { thinkingBudget: 1024 },
+            thinkingBudget: 1024,
           },
-        }),
+          options,
+        ),
       { abortSignal },
     );
 
@@ -454,7 +520,6 @@ export const analyzeRepository = async (
   readme: string,
   options?: GeminiRequestOptions,
 ): Promise<RepoAnalysisResult> => {
-  const client = createClient();
   const abortSignal = options?.abortSignal;
   const prompt = REPO_ANALYSIS_PROMPT_TEMPLATE.replace(
     '{fileList}',
@@ -462,18 +527,18 @@ export const analyzeRepository = async (
   ).replace('{readme}', readme);
 
   try {
-    const response = await withRetry<GenerateContentResponse>(
+    const response = await withRetry(
       () =>
-        client.models.generateContent({
-          model: 'gemini-3-pro-preview',
-          contents: prompt,
-          config: {
-            abortSignal,
+        requestGemini(
+          'gemini-3-pro-preview',
+          prompt,
+          {
             systemInstruction: REPO_ANALYSIS_SYSTEM_INSTRUCTION,
             responseMimeType: 'application/json',
-            thinkingConfig: { thinkingBudget: 2048 },
+            thinkingBudget: 2048,
           },
-        }),
+          options,
+        ),
       { abortSignal },
     );
 
@@ -497,7 +562,6 @@ export const generateProjectStructure = async (
   includeTests: boolean = false,
   options?: GeminiRequestOptions,
 ): Promise<string[]> => {
-  const client = createClient();
   const abortSignal = options?.abortSignal;
   const testReq = includeTests
     ? 'Include comprehensive test files (e.g., __tests__/*.test.tsx, *.spec.ts) for main components and utilities using Vitest/React Testing Library.'
@@ -513,18 +577,18 @@ export const generateProjectStructure = async (
     .replace('{userConfig}', userConfigStr);
 
   try {
-    const response = await withRetry<GenerateContentResponse>(
+    const response = await withRetry(
       () =>
-        client.models.generateContent({
-          model: 'gemini-3-pro-preview',
-          contents: prompt,
-          config: {
-            abortSignal,
+        requestGemini(
+          'gemini-3-pro-preview',
+          prompt,
+          {
             systemInstruction: SCAFFOLD_SYSTEM_INSTRUCTION,
             responseMimeType: 'application/json',
-            thinkingConfig: { thinkingBudget: 1024 },
+            thinkingBudget: 1024,
           },
-        }),
+          options,
+        ),
       { abortSignal },
     );
 
@@ -549,7 +613,6 @@ export const generateMigrationPlaybook = async (
   config: MigrationConfig,
   options?: GeminiRequestOptions,
 ): Promise<MigrationPlaybook> => {
-  const client = createClient();
   const abortSignal = options?.abortSignal;
   const userConfigStr = JSON.stringify(config, null, 2);
   const serializedPaths = JSON.stringify(generatedFilePaths, null, 2);
@@ -564,18 +627,18 @@ export const generateMigrationPlaybook = async (
     .replace('{userConfig}', userConfigStr);
 
   try {
-    const response = await withRetry<GenerateContentResponse>(
+    const response = await withRetry(
       () =>
-        client.models.generateContent({
-          model: 'gemini-3-pro-preview',
-          contents: prompt,
-          config: {
-            abortSignal,
+        requestGemini(
+          'gemini-3-pro-preview',
+          prompt,
+          {
             systemInstruction: PLAYBOOK_SYSTEM_INSTRUCTION,
             responseMimeType: 'application/json',
-            thinkingConfig: { thinkingBudget: 2048 },
+            thinkingBudget: 2048,
           },
-        }),
+          options,
+        ),
       { abortSignal },
     );
 
@@ -600,7 +663,6 @@ export const generateNextJsFile = async (
   config: MigrationConfig,
   options?: GeminiRequestOptions,
 ): Promise<string> => {
-  const client = createClient();
   const abortSignal = options?.abortSignal;
   const safeContext =
     sourceContext.length > 500000
@@ -623,17 +685,17 @@ export const generateNextJsFile = async (
     .replace('{userConfig}', userConfigStr);
 
   try {
-    const response = await withRetry<GenerateContentResponse>(
+    const response = await withRetry(
       () =>
-        client.models.generateContent({
-          model: 'gemini-3-flash-preview',
-          contents: prompt,
-          config: {
-            abortSignal,
+        requestGemini(
+          'gemini-3-flash-preview',
+          prompt,
+          {
             systemInstruction: GENERATION_SYSTEM_INSTRUCTION,
-            thinkingConfig: { thinkingBudget: 2048 },
+            thinkingBudget: 2048,
           },
-        }),
+          options,
+        ),
       { abortSignal },
     );
 
@@ -655,58 +717,16 @@ export const generateNextJsFileStream = async (
   onChunk: (content: string) => void,
   options?: GeminiRequestOptions,
 ): Promise<string> => {
-  const client = createClient();
-  const abortSignal = options?.abortSignal;
-
-  const safeContext =
-    sourceContext.length > 500000
-      ? sourceContext.substring(0, 500000) + '\n...[truncated]'
-      : sourceContext;
-
-  const safeRelated =
-    relatedFilesContext.length > 200000
-      ? relatedFilesContext.substring(0, 200000) + '\n...[truncated]'
-      : relatedFilesContext;
-
-  const userConfigStr = JSON.stringify(config, null, 2);
-
-  const prompt = GENERATION_PROMPT_TEMPLATE.replace(
-    '{targetFilePath}',
-    targetFilePath,
-  )
-    .replace('{sourceContext}', safeContext)
-    .replace('{relatedFilesContext}', safeRelated)
-    .replace('{userConfig}', userConfigStr);
-
   try {
-    const stream = await withRetry(
-      () =>
-        client.models.generateContentStream({
-          model: 'gemini-3-flash-preview',
-          contents: prompt,
-          config: {
-            abortSignal,
-            systemInstruction: GENERATION_SYSTEM_INSTRUCTION,
-            thinkingConfig: { thinkingBudget: 2048 },
-          },
-        }),
-      { abortSignal },
+    const content = await generateNextJsFile(
+      targetFilePath,
+      sourceContext,
+      relatedFilesContext,
+      config,
+      options,
     );
-
-    let accumulated = '';
-
-    for await (const chunk of stream) {
-      abortIfSignaled(abortSignal);
-      const chunkText = chunk.text || '';
-      if (!chunkText) {
-        continue;
-      }
-
-      accumulated += chunkText;
-      onChunk(sanitizeGeneratedCode(accumulated));
-    }
-
-    return sanitizeGeneratedCode(accumulated);
+    onChunk(content);
+    return content;
   } catch (error) {
     if (isAbortError(error)) {
       throw error;
@@ -720,35 +740,34 @@ export const generateArchitectureDiagram = async (
   description: string,
   options?: GeminiRequestOptions,
 ): Promise<string> => {
-  const client = createClient();
   const abortSignal = options?.abortSignal;
   const prompt = `Create a professional, high-level software architecture diagram.
   Style: Whiteboard, technical, clean lines, blue and white color scheme.
   System Description: ${description}`;
 
   try {
-    const response = await withRetry<GenerateContentResponse>(
+    const response = await withRetry(
       () =>
-        client.models.generateContent({
-          model: 'gemini-3-pro-image-preview',
-          contents: {
+        requestGemini(
+          'gemini-3-pro-image-preview',
+          {
             parts: [{ text: prompt }],
           },
-          config: {
-            abortSignal,
+          {
             systemInstruction: REPO_ANALYSIS_SYSTEM_INSTRUCTION,
             imageConfig: {
               aspectRatio: '16:9',
               imageSize: '1K',
             },
           },
-        }),
+          options,
+        ),
       { abortSignal },
     );
 
-    for (const part of response.candidates?.[0]?.content?.parts || []) {
-      if (part.inlineData) {
-        return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+    for (const part of response.inlineData || []) {
+      if (part.mimeType && part.data) {
+        return `data:${part.mimeType};base64,${part.data}`;
       }
     }
     return '';
@@ -768,7 +787,6 @@ export const convertCode = async (
   analysis: AnalysisResult,
   options?: GeminiRequestOptions,
 ): Promise<string> => {
-  const client = createClient();
   const abortSignal = options?.abortSignal;
   const prompt = CONVERSION_PROMPT_TEMPLATE.replace('{sourceLang}', sourceLang)
     .replace('{targetLang}', targetLang)
@@ -776,17 +794,17 @@ export const convertCode = async (
     .replace('{sourceCode}', sourceCode);
 
   try {
-    const response = await withRetry<GenerateContentResponse>(
+    const response = await withRetry(
       () =>
-        client.models.generateContent({
-          model: 'gemini-3-flash-preview',
-          contents: prompt,
-          config: {
-            abortSignal,
+        requestGemini(
+          'gemini-3-flash-preview',
+          prompt,
+          {
             systemInstruction: GENERATION_SYSTEM_INSTRUCTION,
-            thinkingConfig: { thinkingBudget: 2048 },
+            thinkingBudget: 2048,
           },
-        }),
+          options,
+        ),
       { abortSignal },
     );
 
@@ -806,7 +824,6 @@ export const verifyCode = async (
   targetLang: string,
   options?: GeminiRequestOptions,
 ): Promise<VerificationResult> => {
-  const client = createClient();
   const abortSignal = options?.abortSignal;
   const prompt = VERIFICATION_PROMPT_TEMPLATE.replace(
     '{sourceLang}',
@@ -816,18 +833,18 @@ export const verifyCode = async (
     .replace('{targetCode}', targetCode);
 
   try {
-    const response = await withRetry<GenerateContentResponse>(
+    const response = await withRetry(
       () =>
-        client.models.generateContent({
-          model: 'gemini-3-pro-preview',
-          contents: prompt,
-          config: {
-            abortSignal,
+        requestGemini(
+          'gemini-3-pro-preview',
+          prompt,
+          {
             systemInstruction: VERIFICATION_SYSTEM_INSTRUCTION,
             responseMimeType: 'application/json',
-            thinkingConfig: { thinkingBudget: 1024 },
+            thinkingBudget: 1024,
           },
-        }),
+          options,
+        ),
       { abortSignal },
     );
 
@@ -863,7 +880,6 @@ export const verifyRepositoryFiles = async (
   passNumber: number,
   options?: GeminiRequestOptions,
 ): Promise<RepoVerificationResult> => {
-  const client = createClient();
   const abortSignal = options?.abortSignal;
   const existingPaths = new Set(generatedFiles.map((file) => file.path));
 
@@ -890,18 +906,18 @@ export const verifyRepositoryFiles = async (
     .replace('{passNumber}', String(passNumber));
 
   try {
-    const response = await withRetry<GenerateContentResponse>(
+    const response = await withRetry(
       () =>
-        client.models.generateContent({
-          model: 'gemini-3-pro-preview',
-          contents: prompt,
-          config: {
-            abortSignal,
+        requestGemini(
+          'gemini-3-pro-preview',
+          prompt,
+          {
             systemInstruction: VERIFICATION_SYSTEM_INSTRUCTION,
             responseMimeType: 'application/json',
-            thinkingConfig: { thinkingBudget: 2048 },
+            thinkingBudget: 2048,
           },
-        }),
+          options,
+        ),
       { abortSignal },
     );
 

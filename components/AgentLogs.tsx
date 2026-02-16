@@ -30,7 +30,7 @@ const AgentLogs: React.FC<AgentLogsProps> = ({ logs }) => {
       >
         {logs.length === 0 && (
           <div className="text-gray-600 italic flex items-center gap-1">
-            Waiting for input
+            Waiting for input...
             <span className="terminal-cursor" />
           </div>
         )}

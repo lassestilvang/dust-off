@@ -100,8 +100,8 @@ All commands below were run and verified.
 ## Required vs Optional Environment Setup
 - `.env.example` defines `GEMINI_API_KEY`.
 - Build/lint/test do **not** require a real key.
-- Real AI features in UI/services require `GEMINI_API_KEY` (typically via `.env.local`).
-- `vite.config.ts` injects `process.env.API_KEY` and `process.env.GEMINI_API_KEY` from Vite env.
+- Real AI features require a server-side `GEMINI_API_KEY` (local dev can use `.env.local`).
+- Gemini requests flow through `/api/gemini` (Vercel function + Vite dev middleware), so the key is not injected into client bundles.
 
 ## Architecture and File Map
 
@@ -113,6 +113,8 @@ All commands below were run and verified.
 - `components/RepoMigration.tsx`: main orchestration UI/state for repository flow.
 - `components/SnippetMigration.tsx`: snippet conversion flow.
 - `services/geminiService.ts`: Gemini API wrappers, retries, generation/analyze/verify calls.
+- `api/gemini.ts`: Vercel serverless endpoint for Gemini proxying.
+- `server/geminiProxy.ts`: shared server-only Gemini proxy logic (used by API route + Vite dev middleware).
 - `services/githubService.ts`: GitHub URL parsing, repo tree/file content fetching.
 - `constants.ts`: all model prompt templates and default source snippet.
 - `types.ts`: shared domain types and enums.
