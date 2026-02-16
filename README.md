@@ -13,7 +13,9 @@ An intelligent, AI-powered tool designed to automate the migration of legacy cod
 
 ## Screenshots 📸
 
-_Coming soon_
+![Dashboard](screenshot.jpg)
+![Migration In Progress](screenshot-migration.jpg)
+![Migration Report](screenshot-report.jpg)
 
 ## Tech Stack 🛠️
 
