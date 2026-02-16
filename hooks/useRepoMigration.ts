@@ -6,7 +6,6 @@ import {
   useRef,
   useState,
 } from 'react';
-import JSZip from 'jszip';
 import {
   AgentStatus,
   FileNode,
@@ -827,9 +826,13 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
       return;
     }
 
+    const { default: JSZip } = await import('jszip');
     const zip = new JSZip();
 
-    const addNodeToZip = (nodes: FileNode[], folder: JSZip): void => {
+    const addNodeToZip = (
+      nodes: FileNode[],
+      folder: import('jszip').default,
+    ): void => {
       nodes.forEach((node) => {
         if (node.type === 'dir' && node.children) {
           const newFolder = folder.folder(node.name);

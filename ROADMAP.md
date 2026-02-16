@@ -1,6 +1,6 @@
 # DustOff — Comprehensive Improvement Roadmap
 
-## ✅ Progress (2026-02-15)
+## ✅ Progress (2026-02-16)
 
 - Completed: #1 Extract RepoMigration into hooks/services
 - Completed: #2 Build-time Tailwind migration
@@ -23,6 +23,9 @@
 - Completed: #24 Copy-to-clipboard for generated code
 - Completed: #25 Dark/light theme toggle
 - Completed: #26 Expanded test coverage for core migration UI flows
+- Completed: #28 Bundle analysis & optimization
+- Completed: #29 Add PWA support
+- Completed: #30 Environment variable validation at startup
 
 ## 🏗️ ARCHITECTURE & CODE QUALITY
 
@@ -150,13 +153,13 @@
 
 ## 📦 BUILD & INFRA
 
-- [ ] **28. Bundle analysis & optimization**
+- [x] **28. Bundle analysis & optimization**
       No bundle analysis configured. `@google/genai`, `jszip`, `lucide-react`, and `prismjs` with all language grammars are likely making the bundle large. Add `rollup-plugin-visualizer` and lazy-load non-critical deps.
 
-- [ ] **29. Add PWA support**
+- [x] **29. Add PWA support**
       A migration tool benefits from offline capability (reviewing previously generated code). Add a service worker and manifest.
 
-- [ ] **30. Environment variable validation at startup**
+- [x] **30. Environment variable validation at startup**
       `getApiKey()` silently returns `''` if no key is set. Show a clear onboarding banner: "Add your Gemini API key to get started."
 
 ---

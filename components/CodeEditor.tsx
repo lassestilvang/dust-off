@@ -1,21 +1,9 @@
 import React from 'react';
 import Editor from 'react-simple-code-editor';
 import Prism from 'prismjs';
-import 'prismjs/components/prism-clike';
-import 'prismjs/components/prism-javascript';
-import 'prismjs/components/prism-typescript';
-import 'prismjs/components/prism-jsx';
-import 'prismjs/components/prism-tsx';
-import 'prismjs/components/prism-css';
-import 'prismjs/components/prism-json';
-import 'prismjs/components/prism-python';
-import 'prismjs/components/prism-java';
-import 'prismjs/components/prism-go';
-import 'prismjs/components/prism-rust';
-import 'prismjs/components/prism-bash';
-import 'prismjs/components/prism-markdown';
 import { FileType, FileText, Braces, Palette } from 'lucide-react';
 import { ReactIcon, TypeScriptIcon, JavaScriptIcon, PythonIcon } from './Icons';
+import { ensurePrismLanguage } from '../services/prismLanguageLoader';
 
 interface CodeEditorProps {
   title: string;
@@ -26,6 +14,25 @@ interface CodeEditorProps {
   highlight?: boolean; // This refers to the border glow effect
 }
 
+const normalizeLanguage = (lang: string): string => {
+  const lower = lang.toLowerCase();
+  const map: Record<string, string> = {
+    python2: 'python',
+    python3: 'python',
+    react: 'tsx',
+    nextjs: 'tsx',
+    vue2: 'javascript', // basic fallback
+    vue3: 'javascript',
+    angular: 'typescript',
+    jquery: 'javascript',
+    astro: 'typescript',
+    js: 'javascript',
+    ts: 'typescript',
+    shell: 'bash',
+  };
+  return map[lower] || lower;
+};
+
 const CodeEditor: React.FC<CodeEditorProps> = ({
   title,
   code,
@@ -34,29 +41,40 @@ const CodeEditor: React.FC<CodeEditorProps> = ({
   readOnly = false,
   highlight = false,
 }) => {
-  const normalizeLanguage = (lang: string) => {
-    const lower = lang.toLowerCase();
-    const map: Record<string, string> = {
-      python2: 'python',
-      python3: 'python',
-      react: 'tsx',
-      nextjs: 'tsx',
-      vue2: 'javascript', // basic fallback
-      vue3: 'javascript',
-      angular: 'typescript',
-      jquery: 'javascript',
-      astro: 'typescript',
-      js: 'javascript',
-      ts: 'typescript',
-      shell: 'bash',
+  const normalizedLanguage = React.useMemo(
+    () => normalizeLanguage(language),
+    [language],
+  );
+  const [, setGrammarVersion] = React.useState(0);
+
+  React.useEffect(() => {
+    let isCancelled = false;
+
+    const loadLanguage = async () => {
+      try {
+        await ensurePrismLanguage(normalizedLanguage);
+        if (!isCancelled) {
+          setGrammarVersion((version) => version + 1);
+        }
+      } catch (error) {
+        console.error(
+          `Failed to load Prism language '${normalizedLanguage}'.`,
+          error,
+        );
+      }
     };
-    return map[lower] || lower;
-  };
+
+    void loadLanguage();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [normalizedLanguage]);
 
   const highlightCode = (code: string) => {
-    const normLang = normalizeLanguage(language);
-    const grammar = Prism.languages[normLang] || Prism.languages.javascript;
-    return Prism.highlight(code, grammar, normLang);
+    const grammar =
+      Prism.languages[normalizedLanguage] || Prism.languages.javascript;
+    return Prism.highlight(code, grammar, normalizedLanguage);
   };
 
   const getHeaderIcon = () => {
