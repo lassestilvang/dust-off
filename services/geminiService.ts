@@ -1,4 +1,5 @@
 import {
+  ARCHITECTURE_DIAGRAM_SYSTEM_INSTRUCTION,
   ANALYSIS_PROMPT_TEMPLATE,
   ANALYSIS_SYSTEM_INSTRUCTION,
   CONVERSION_PROMPT_TEMPLATE,
@@ -44,6 +45,7 @@ interface GeminiImageConfig {
 interface GeminiProxyConfig {
   systemInstruction?: string;
   responseMimeType?: string;
+  responseModalities?: string[];
   thinkingBudget?: number;
   imageConfig?: GeminiImageConfig;
 }
@@ -754,7 +756,8 @@ export const generateArchitectureDiagram = async (
             parts: [{ text: prompt }],
           },
           {
-            systemInstruction: REPO_ANALYSIS_SYSTEM_INSTRUCTION,
+            systemInstruction: ARCHITECTURE_DIAGRAM_SYSTEM_INSTRUCTION,
+            responseModalities: ['IMAGE'],
             imageConfig: {
               aspectRatio: '16:9',
               imageSize: '1K',

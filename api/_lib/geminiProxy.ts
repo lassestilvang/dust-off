@@ -11,6 +11,7 @@ const DEFAULT_RATE_LIMIT_MAX_REQUESTS = 60;
 interface GeminiProxyConfig {
   systemInstruction?: string;
   responseMimeType?: string;
+  responseModalities?: string[];
   thinkingBudget?: number;
   imageConfig?: {
     aspectRatio?: string;
@@ -236,6 +237,13 @@ const buildGeminiConfig = (
 
   if (typeof config?.responseMimeType === 'string') {
     normalized.responseMimeType = config.responseMimeType;
+  }
+
+  if (Array.isArray(config?.responseModalities)) {
+    normalized.responseModalities = config.responseModalities.filter(
+      (modality): modality is string =>
+        typeof modality === 'string' && modality.trim().length > 0,
+    );
   }
 
   if (

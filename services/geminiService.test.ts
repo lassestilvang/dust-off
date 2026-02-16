@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   analyzeCode,
+  generateArchitectureDiagram,
   generateProjectStructure,
   validateGeminiApiKey,
 } from './geminiService';
@@ -86,6 +87,48 @@ describe('geminiService', () => {
 
       expect(result).toContain('package.json');
       expect(result).toContain('app/page.tsx');
+    });
+  });
+
+  describe('generateArchitectureDiagram', () => {
+    it('requests image modality and returns a data URL', async () => {
+      const mockImageBase64 = 'aW1hZ2U=';
+
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          text: '',
+          inlineData: [
+            {
+              mimeType: 'image/png',
+              data: mockImageBase64,
+            },
+          ],
+        }),
+      });
+
+      const result = await generateArchitectureDiagram(
+        'Legacy PHP client/server flow',
+      );
+
+      expect(result).toBe(`data:image/png;base64,${mockImageBase64}`);
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+
+      const [url, requestInit] = mockFetch.mock.calls[0] as [
+        string,
+        RequestInit,
+      ];
+      expect(url).toBe('/api/gemini');
+      expect(requestInit.method).toBe('POST');
+
+      const payload = JSON.parse(String(requestInit.body)) as {
+        model: string;
+        config: { responseModalities?: string[] };
+      };
+
+      expect(payload.model).toBe('gemini-3-pro-image-preview');
+      expect(payload.config.responseModalities).toEqual(['IMAGE']);
     });
   });
 

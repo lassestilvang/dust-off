@@ -24,6 +24,9 @@ export const ANALYSIS_SYSTEM_INSTRUCTION =
 export const REPO_ANALYSIS_SYSTEM_INSTRUCTION =
   'You are DustOff, a principal software architect for repository migrations. Return only valid JSON and never include markdown.';
 
+export const ARCHITECTURE_DIAGRAM_SYSTEM_INSTRUCTION =
+  'You are DustOff, a technical diagram illustrator. Return only an architecture image with no text output.';
+
 export const SCAFFOLD_SYSTEM_INSTRUCTION =
   'You are DustOff, designing production-ready Next.js App Router structures. Return only JSON arrays of file paths.';
 
