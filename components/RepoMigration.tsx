@@ -419,7 +419,7 @@ const RepoMigration: React.FC = () => {
 
   return (
     <>
-      <div className="flex flex-col gap-6 h-full overflow-hidden">
+      <div className="flex flex-col gap-6 h-full min-h-0 overflow-y-auto">
         <div className="bg-dark-800 p-4 rounded-xl border border-dark-700 flex flex-col gap-4 shrink-0 shadow-lg">
           <div className="flex flex-col gap-2 w-full">
             <div className="flex flex-wrap items-center gap-2 text-xs mb-1">
