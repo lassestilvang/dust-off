@@ -93,6 +93,24 @@ export interface GeneratePhaseInput {
   abortSignal?: AbortSignal;
 }
 
+export interface RegenerateFilePhaseInput {
+  targetPath: string;
+  generatedFiles: FileNode[];
+  analysis: RepoAnalysisResult;
+  sourceContext: string;
+  fileContents?: Record<string, string>;
+  filesToRead?: FileNode[];
+  graph?: DependencyGraph;
+  config: MigrationConfig;
+  userInstructions?: string;
+  addLog: AddLogFn;
+  onFileStart: (path: string) => void;
+  onFileChunk: (path: string, content: string) => void;
+  onFileGenerated: (path: string, content: string) => void;
+  onFileError: (path: string) => void;
+  abortSignal?: AbortSignal;
+}
+
 export interface VerifyPhaseInput {
   generatedFiles: FileNode[];
   analysis: RepoAnalysisResult;
@@ -1028,6 +1046,85 @@ export const runGeneratePhase = async ({
         AgentStatus.CONVERTING,
       );
     }
+  }
+};
+
+export const runRegenerateFilePhase = async ({
+  targetPath,
+  generatedFiles,
+  analysis,
+  sourceContext,
+  fileContents = {},
+  filesToRead = [],
+  graph = {},
+  config,
+  userInstructions,
+  addLog,
+  onFileStart,
+  onFileChunk,
+  onFileGenerated,
+  onFileError,
+  abortSignal,
+}: RegenerateFilePhaseInput): Promise<void> => {
+  const flatTargetFiles = flattenFiles(generatedFiles).filter(
+    (file) => file.type === 'file',
+  );
+
+  const targetFile = flatTargetFiles.find((file) => file.path === targetPath);
+  if (!targetFile) {
+    throw new Error(`Cannot regenerate unknown target file: ${targetPath}`);
+  }
+
+  const sourcePaths = filesToRead.map((file) => file.path);
+  const semanticMatches = buildSemanticTargetMatches(
+    [targetPath],
+    sourcePaths,
+    analysis,
+  );
+
+  const semanticMatch = semanticMatches.get(targetPath);
+  let relatedContext = buildRelatedContext(
+    targetPath,
+    semanticMatch,
+    graph,
+    fileContents,
+  );
+
+  const trimmedInstructions = userInstructions?.trim();
+  if (trimmedInstructions) {
+    relatedContext = `${relatedContext}\n\n--- USER REGENERATION INSTRUCTIONS ---\n${trimmedInstructions}\nPrioritize these instructions while generating this file.`;
+  }
+
+  onFileStart(targetPath);
+  addLog(
+    `Regenerating ${targetPath}${trimmedInstructions ? ' with custom instructions' : ''}...`,
+    'info',
+    AgentStatus.CONVERTING,
+  );
+
+  try {
+    const content = await generateNextJsFileStream(
+      targetPath,
+      sourceContext,
+      relatedContext,
+      config,
+      (streamedContent) => onFileChunk(targetPath, streamedContent),
+      { abortSignal },
+    );
+
+    onFileGenerated(targetPath, content);
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
+
+    onFileError(targetPath);
+    addLog(
+      `Failed to regenerate ${targetPath}`,
+      'error',
+      AgentStatus.CONVERTING,
+    );
+    throw error;
   }
 };
 

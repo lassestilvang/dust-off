@@ -26,6 +26,8 @@
 - Completed: #28 Bundle analysis & optimization
 - Completed: #29 Add PWA support
 - Completed: #30 Environment variable validation at startup
+- Completed: #9 Editable generated code
+- Completed: #10 Per-file regeneration
 
 ## 🏗️ ARCHITECTURE & CODE QUALITY
 
@@ -63,10 +65,10 @@
 - [ ] **8. Side-by-side diff view (source → target)**
       The biggest missing UX feature. Users want to see the _old file_ next to the _new file_ for each component, with a diff highlight showing what changed. This is the killer feature for a migration tool.
 
-- [ ] **9. Editable generated code**
+- [x] **9. Editable generated code**
       Generated files are read-only. Let users edit generated code before downloading, so they can fix issues or tweak the output without downloading first.
 
-- [ ] **10. Per-file regeneration**
+- [x] **10. Per-file regeneration**
       If a single file is bad, users should be able to right-click → "Regenerate this file" with optional user instructions (e.g., "use server component instead"), rather than re-running the entire migration.
 
 - [ ] **11. Migration target beyond Next.js**

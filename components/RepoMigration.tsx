@@ -9,6 +9,7 @@ import {
   Database,
   Layout,
   RotateCw,
+  RefreshCw,
   Maximize2,
   X,
   Code2,
@@ -80,6 +81,7 @@ const RepoMigration: React.FC = () => {
     isAnalyzed,
     isWorking,
     isBusy,
+    regeneratingFilePath,
     selectedNode,
     setUrl,
     setConfig,
@@ -91,6 +93,8 @@ const RepoMigration: React.FC = () => {
     handleConfigConfirm,
     handleDownload,
     handleFileSelect,
+    handleGeneratedFileEdit,
+    regenerateTargetFile,
   } = useRepoMigration();
 
   const rateLimitResetLabel = state.githubRateLimit?.resetAt
@@ -126,6 +130,17 @@ const RepoMigration: React.FC = () => {
     selectedNode.type === 'file' &&
     !isImageFile(selectedNode.name) &&
     selectedNode.content,
+  );
+  const canRegenerateGeneratedCode = Boolean(
+    state.activeTree === 'target' &&
+    selectedNode &&
+    selectedNode.type === 'file' &&
+    !isImageFile(selectedNode.name),
+  );
+  const isRegeneratingSelectedFile = Boolean(
+    selectedNode &&
+    selectedNode.type === 'file' &&
+    regeneratingFilePath === selectedNode.path,
   );
   const trimmedRepoUrl = state.url.trim();
   const normalizedRepoUrl = React.useMemo(
@@ -204,6 +219,45 @@ const RepoMigration: React.FC = () => {
     }
     void startRepoProcess();
   }, [isAnalyzeDisabled, startRepoProcess]);
+
+  const handleRegenerateClick = React.useCallback(() => {
+    if (
+      !(
+        selectedNode &&
+        selectedNode.type === 'file' &&
+        state.activeTree === 'target'
+      )
+    ) {
+      return;
+    }
+
+    const instructions = window.prompt(
+      'Optional instructions for this file regeneration (leave blank to use defaults).',
+      '',
+    );
+
+    if (instructions === null) {
+      return;
+    }
+
+    void regenerateTargetFile(selectedNode.path, instructions);
+  }, [regenerateTargetFile, selectedNode, state.activeTree]);
+
+  const handleRegenerateFromExplorer = React.useCallback(
+    (path: string) => {
+      const instructions = window.prompt(
+        `Optional instructions for regenerating ${path} (leave blank to use defaults).`,
+        '',
+      );
+
+      if (instructions === null) {
+        return;
+      }
+
+      void regenerateTargetFile(path, instructions);
+    },
+    [regenerateTargetFile],
+  );
 
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -780,6 +834,7 @@ const RepoMigration: React.FC = () => {
               activeTree={state.activeTree}
               onToggleTree={setActiveTree}
               onSelectFile={(path) => void handleFileSelect(path)}
+              onRegenerateFile={handleRegenerateFromExplorer}
             />
           </div>
 
@@ -816,29 +871,47 @@ const RepoMigration: React.FC = () => {
                   </div>
                 ) : (
                   <div className="flex flex-col h-full min-h-0">
-                    {canCopyGeneratedCode && (
+                    {(canCopyGeneratedCode || canRegenerateGeneratedCode) && (
                       <div className="px-3 py-2 border-b border-dark-700 bg-dark-900/80 flex justify-end">
-                        <button
-                          onClick={() => void copyGeneratedCode()}
-                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border transition-colors ${
-                            copyStatus === 'copied'
-                              ? 'text-green-200 bg-green-900/30 border-green-500/40'
-                              : copyStatus === 'error'
-                                ? 'text-red-200 bg-red-900/30 border-red-500/40'
-                                : 'text-gray-200 bg-dark-800 border-dark-600 hover:bg-dark-700'
-                          }`}
-                        >
-                          {copyStatus === 'copied' ? (
-                            <Check className="w-3.5 h-3.5" />
-                          ) : (
-                            <Copy className="w-3.5 h-3.5" />
+                        <div className="inline-flex items-center gap-2">
+                          {canRegenerateGeneratedCode && (
+                            <button
+                              onClick={handleRegenerateClick}
+                              disabled={isRegeneratingSelectedFile}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border text-gray-200 bg-dark-800 border-dark-600 hover:bg-dark-700 disabled:cursor-not-allowed disabled:opacity-70"
+                            >
+                              <RefreshCw
+                                className={`w-3.5 h-3.5 ${isRegeneratingSelectedFile ? 'animate-spin' : ''}`}
+                              />
+                              {isRegeneratingSelectedFile
+                                ? 'Regenerating...'
+                                : 'Regenerate File'}
+                            </button>
                           )}
-                          {copyStatus === 'copied'
-                            ? 'Copied'
-                            : copyStatus === 'error'
-                              ? 'Copy failed'
-                              : 'Copy Code'}
-                        </button>
+                          {canCopyGeneratedCode && (
+                            <button
+                              onClick={() => void copyGeneratedCode()}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border transition-colors ${
+                                copyStatus === 'copied'
+                                  ? 'text-green-200 bg-green-900/30 border-green-500/40'
+                                  : copyStatus === 'error'
+                                    ? 'text-red-200 bg-red-900/30 border-red-500/40'
+                                    : 'text-gray-200 bg-dark-800 border-dark-600 hover:bg-dark-700'
+                              }`}
+                            >
+                              {copyStatus === 'copied' ? (
+                                <Check className="w-3.5 h-3.5" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                              {copyStatus === 'copied'
+                                ? 'Copied'
+                                : copyStatus === 'error'
+                                  ? 'Copy failed'
+                                  : 'Copy Code'}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     )}
                     <div className="flex-1 min-h-0">
@@ -859,7 +932,12 @@ const RepoMigration: React.FC = () => {
                             ? '// Generating...'
                             : '// Loading...')
                         }
-                        readOnly={true}
+                        readOnly={state.activeTree === 'source'}
+                        onChange={(value) => {
+                          if (state.activeTree === 'target') {
+                            handleGeneratedFileEdit(selectedNode.path, value);
+                          }
+                        }}
                         highlight={
                           state.activeTree === 'target' &&
                           !!selectedNode.content

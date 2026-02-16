@@ -19,6 +19,7 @@ import {
   Palette,
   Box,
   Coffee,
+  RefreshCw,
 } from 'lucide-react';
 import {
   ReactIcon,
@@ -37,6 +38,7 @@ interface FileExplorerProps {
   selectedFile: string | null;
   activeTree: 'source' | 'target';
   onToggleTree: (mode: 'source' | 'target') => void;
+  onRegenerateFile?: (path: string) => void;
 }
 
 const getFileIconConfig = (filename: string) => {
@@ -84,7 +86,19 @@ const FileItem: React.FC<{
   depth: number;
   onSelect: (path: string) => void;
   selectedFile: string | null;
-}> = ({ node, depth, onSelect, selectedFile }) => {
+  activeTree: 'source' | 'target';
+  onOpenContextMenu?: (
+    event: React.MouseEvent<HTMLDivElement>,
+    path: string,
+  ) => void;
+}> = ({
+  node,
+  depth,
+  onSelect,
+  selectedFile,
+  activeTree,
+  onOpenContextMenu,
+}) => {
   const [isOpen, setIsOpen] = React.useState(true);
 
   // Styling constants
@@ -125,6 +139,8 @@ const FileItem: React.FC<{
                 depth={depth + 1}
                 onSelect={onSelect}
                 selectedFile={selectedFile}
+                activeTree={activeTree}
+                onOpenContextMenu={onOpenContextMenu}
               />
             ))}
           </div>
@@ -144,6 +160,14 @@ const FileItem: React.FC<{
       `}
       style={rowStyle}
       onClick={() => onSelect(node.path)}
+      onContextMenu={(event) => {
+        if (activeTree !== 'target' || !onOpenContextMenu) {
+          return;
+        }
+
+        onSelect(node.path);
+        onOpenContextMenu(event, node.path);
+      }}
     >
       {isSelected && (
         <div className="absolute inset-0 bg-accent-500/5 pointer-events-none" />
@@ -182,9 +206,54 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
   selectedFile,
   activeTree,
   onToggleTree,
+  onRegenerateFile,
 }) => {
+  const [contextMenu, setContextMenu] = React.useState<{
+    path: string;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  const handleOpenContextMenu = React.useCallback(
+    (event: React.MouseEvent<HTMLDivElement>, path: string) => {
+      if (activeTree !== 'target' || !onRegenerateFile) {
+        return;
+      }
+
+      event.preventDefault();
+      setContextMenu({
+        path,
+        x: event.clientX,
+        y: event.clientY,
+      });
+    },
+    [activeTree, onRegenerateFile],
+  );
+
+  React.useEffect(() => {
+    if (!contextMenu) {
+      return;
+    }
+
+    const dismissMenu = () => setContextMenu(null);
+
+    window.addEventListener('click', dismissMenu);
+    window.addEventListener('scroll', dismissMenu, true);
+    window.addEventListener('resize', dismissMenu);
+
+    return () => {
+      window.removeEventListener('click', dismissMenu);
+      window.removeEventListener('scroll', dismissMenu, true);
+      window.removeEventListener('resize', dismissMenu);
+    };
+  }, [contextMenu]);
+
+  React.useEffect(() => {
+    setContextMenu(null);
+  }, [activeTree, files]);
+
   return (
-    <div className="h-full flex flex-col bg-dark-900 rounded-xl border border-dark-700 overflow-hidden shadow-inner">
+    <div className="h-full flex flex-col bg-dark-900 rounded-xl border border-dark-700 overflow-hidden shadow-inner relative">
       <div className="px-2 py-2 border-b border-dark-700 bg-dark-900 flex gap-1">
         <button
           onClick={() => onToggleTree('source')}
@@ -239,11 +308,31 @@ const FileExplorer: React.FC<FileExplorerProps> = ({
                 depth={0}
                 onSelect={onSelectFile}
                 selectedFile={selectedFile}
+                activeTree={activeTree}
+                onOpenContextMenu={handleOpenContextMenu}
               />
             ))}
           </div>
         )}
       </div>
+      {contextMenu && onRegenerateFile && (
+        <div
+          className="fixed z-50 min-w-[170px] rounded-md border border-dark-600 bg-dark-900 shadow-xl py-1"
+          style={{ top: contextMenu.y, left: contextMenu.x }}
+        >
+          <button
+            type="button"
+            className="w-full px-3 py-2 text-left text-xs text-gray-200 hover:bg-dark-800 inline-flex items-center gap-2"
+            onClick={() => {
+              onRegenerateFile(contextMenu.path);
+              setContextMenu(null);
+            }}
+          >
+            <RefreshCw className="w-3.5 h-3.5 text-accent-400" />
+            Regenerate this file
+          </button>
+        </div>
+      )}
     </div>
   );
 };

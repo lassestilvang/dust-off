@@ -28,12 +28,14 @@ import {
   isImageFile,
   runAnalyzePhase,
   runGeneratePhase,
+  runRegenerateFilePhase,
   runScaffoldPhase,
   runVerificationPhase,
 } from '../services/migrationOrchestrator';
 import { useMigrationLogs } from './useMigrationLogs';
 import { isAbortError } from '../services/abortUtils';
 import { validateGeminiApiKey } from '../services/geminiService';
+import type { DependencyGraph } from '../services/dependencyGraph';
 
 declare global {
   interface Window {
@@ -108,6 +110,13 @@ interface PersistedRepoState {
   githubRateLimit: GitHubRateLimitInfo | null;
   repoScope: RepoScopeInfo | null;
   generationProgress: GenerationProgress | null;
+}
+
+interface GenerationContextCache {
+  sourceContext: string;
+  fileContents: Record<string, string>;
+  filesToRead: FileNode[];
+  graph: DependencyGraph;
 }
 
 const stripFileContents = (nodes: FileNode[]): FileNode[] => {
@@ -445,6 +454,7 @@ interface UseRepoMigrationResult {
   isAnalyzed: boolean;
   isWorking: boolean;
   isBusy: boolean;
+  regeneratingFilePath: string | null;
   selectedNode: FileNode | null;
   setUrl: (url: string) => void;
   setConfig: (config: MigrationConfig) => void;
@@ -456,6 +466,8 @@ interface UseRepoMigrationResult {
   handleConfigConfirm: () => void;
   handleDownload: () => Promise<void>;
   handleFileSelect: (path: string) => Promise<void>;
+  handleGeneratedFileEdit: (path: string, content: string) => void;
+  regenerateTargetFile: (path: string, instructions?: string) => Promise<void>;
 }
 
 export const useRepoMigration = (): UseRepoMigrationResult => {
@@ -467,8 +479,12 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
   const [isDiagramOpen, setIsDiagramOpen] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [showConfigModal, setShowConfigModal] = useState(false);
+  const [regeneratingFilePath, setRegeneratingFilePath] = useState<
+    string | null
+  >(null);
   const activeControllerRef = useRef<AbortController | null>(null);
   const cancelRequestedRef = useRef(false);
+  const generationContextRef = useRef<GenerationContextCache | null>(null);
 
   const stateRef = useRef(state);
   useEffect(() => {
@@ -580,6 +596,14 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
     const { url, includeDirectories, excludeDirectories } = stateRef.current;
     const normalizedUrl = normalizeGitHubRepoUrl(url);
 
+    if (activeControllerRef.current) {
+      addLog(
+        'Another operation is already running. Wait for it to finish before starting a new run.',
+        'warning',
+      );
+      return;
+    }
+
     if (!normalizedUrl) {
       addLog(
         'Please enter a valid GitHub repository URL (https://github.com/owner/repo).',
@@ -592,6 +616,8 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
       dispatch({ type: 'set_url', payload: normalizedUrl });
     }
 
+    generationContextRef.current = null;
+    setRegeneratingFilePath(null);
     dispatch({ type: 'reset_for_analysis' });
     cancelRequestedRef.current = false;
     const controller = new AbortController();
@@ -652,10 +678,20 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
   const startMigration = useCallback(async () => {
     const currentState = stateRef.current;
 
+    if (activeControllerRef.current) {
+      addLog(
+        'Another operation is already running. Wait for it to finish before starting a new run.',
+        'warning',
+      );
+      return;
+    }
+
     if (!currentState.analysis || !currentState.config) {
       return;
     }
 
+    generationContextRef.current = null;
+    setRegeneratingFilePath(null);
     dispatch({ type: 'set_generation_progress', payload: null });
     dispatch({ type: 'set_status', payload: AgentStatus.CONVERTING });
     cancelRequestedRef.current = false;
@@ -672,6 +708,13 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
         onGitHubRateLimitUpdate: handleGitHubRateLimitUpdate,
         abortSignal: controller.signal,
       });
+
+      generationContextRef.current = {
+        sourceContext: scaffoldResult.sourceContext,
+        fileContents: scaffoldResult.fileContents,
+        filesToRead: scaffoldResult.filesToRead,
+        graph: scaffoldResult.graph,
+      };
 
       dispatch({
         type: 'set_source_context',
@@ -920,6 +963,154 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
     [handleGitHubRateLimitUpdate],
   );
 
+  const handleGeneratedFileEdit = useCallback(
+    (path: string, content: string) => {
+      dispatch({
+        type: 'update_file_content',
+        payload: { path, content, tree: 'target' },
+      });
+      dispatch({
+        type: 'update_file_status',
+        payload: { path, status: 'done', tree: 'target' },
+      });
+    },
+    [],
+  );
+
+  const regenerateTargetFile = useCallback(
+    async (path: string, instructions = '') => {
+      const currentState = stateRef.current;
+
+      if (isBusyStatus(currentState.status)) {
+        addLog(
+          'Please wait for the current operation to finish before regenerating a file.',
+          'warning',
+        );
+        return;
+      }
+
+      if (activeControllerRef.current) {
+        addLog(
+          'Another operation is already running. Wait for it to finish, then try again.',
+          'warning',
+        );
+        return;
+      }
+
+      if (!currentState.analysis) {
+        addLog(
+          'Run repository analysis first before regenerating individual files.',
+          'warning',
+        );
+        return;
+      }
+
+      const targetNode = flattenFiles(currentState.generatedFiles).find(
+        (node) => node.path === path,
+      );
+      if (!targetNode || targetNode.type !== 'file') {
+        addLog(`Cannot regenerate unknown file: ${path}`, 'error');
+        return;
+      }
+
+      const sourceContext =
+        generationContextRef.current?.sourceContext ||
+        currentState.sourceContext;
+      if (!sourceContext.trim()) {
+        addLog(
+          'Source context is unavailable. Run Configure & Build before per-file regeneration.',
+          'warning',
+        );
+        return;
+      }
+
+      const previousContent = targetNode.content || '';
+      const controller = new AbortController();
+
+      cancelRequestedRef.current = false;
+      activeControllerRef.current = controller;
+      setRegeneratingFilePath(path);
+      dispatch({ type: 'set_active_tree', payload: 'target' });
+      dispatch({ type: 'set_selected_file', payload: path });
+
+      try {
+        await runRegenerateFilePhase({
+          targetPath: path,
+          generatedFiles: currentState.generatedFiles,
+          analysis: currentState.analysis,
+          sourceContext,
+          fileContents: generationContextRef.current?.fileContents || {},
+          filesToRead: generationContextRef.current?.filesToRead || [],
+          graph: generationContextRef.current?.graph || {},
+          config: currentState.config,
+          userInstructions: instructions.trim(),
+          addLog,
+          abortSignal: controller.signal,
+          onFileStart: (filePath) => {
+            dispatch({
+              type: 'update_file_status',
+              payload: { path: filePath, status: 'migrating', tree: 'target' },
+            });
+          },
+          onFileChunk: (filePath, content) => {
+            dispatch({
+              type: 'update_file_content',
+              payload: { path: filePath, content, tree: 'target' },
+            });
+          },
+          onFileGenerated: (filePath, content) => {
+            dispatch({
+              type: 'update_file_content',
+              payload: { path: filePath, content, tree: 'target' },
+            });
+            dispatch({
+              type: 'update_file_status',
+              payload: { path: filePath, status: 'done', tree: 'target' },
+            });
+          },
+          onFileError: (filePath) => {
+            dispatch({
+              type: 'update_file_status',
+              payload: { path: filePath, status: 'error', tree: 'target' },
+            });
+          },
+        });
+
+        addLog(`Regenerated ${path}.`, 'success', AgentStatus.COMPLETED);
+      } catch (error: unknown) {
+        dispatch({
+          type: 'update_file_content',
+          payload: { path, content: previousContent, tree: 'target' },
+        });
+
+        if (isAbortError(error)) {
+          dispatch({
+            type: 'update_file_status',
+            payload: { path, status: 'done', tree: 'target' },
+          });
+          if (!cancelRequestedRef.current) {
+            addLog(`Regeneration cancelled for ${path}.`, 'warning');
+          }
+          return;
+        }
+
+        dispatch({
+          type: 'update_file_status',
+          payload: { path, status: 'error', tree: 'target' },
+        });
+        const message = error instanceof Error ? error.message : String(error);
+        addLog(`Failed to regenerate ${path}: ${message}`, 'error');
+      } finally {
+        if (activeControllerRef.current === controller) {
+          activeControllerRef.current = null;
+        }
+        cancelRequestedRef.current = false;
+        setRegeneratingFilePath(null);
+      }
+    },
+    [addLog],
+  );
+
   const selectedNode = useMemo(() => {
     if (!state.selectedFile) {
       return null;
@@ -955,6 +1146,7 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
     isAnalyzed,
     isWorking,
     isBusy,
+    regeneratingFilePath,
     selectedNode,
     setUrl,
     setConfig,
@@ -966,6 +1158,8 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
     handleConfigConfirm,
     handleDownload,
     handleFileSelect,
+    handleGeneratedFileEdit,
+    regenerateTargetFile,
   };
 };
 

@@ -6,6 +6,7 @@ const {
   mockRunAnalyzePhase,
   mockRunScaffoldPhase,
   mockRunGeneratePhase,
+  mockRunRegenerateFilePhase,
   mockRunVerificationPhase,
   mockGenerateReport,
 } = vi.hoisted(() => ({
@@ -13,6 +14,7 @@ const {
   mockRunAnalyzePhase: vi.fn(),
   mockRunScaffoldPhase: vi.fn(),
   mockRunGeneratePhase: vi.fn(),
+  mockRunRegenerateFilePhase: vi.fn(),
   mockRunVerificationPhase: vi.fn(),
   mockGenerateReport: vi.fn(),
 }));
@@ -72,6 +74,7 @@ vi.mock('../services/migrationOrchestrator', () => {
     runAnalyzePhase: mockRunAnalyzePhase,
     runScaffoldPhase: mockRunScaffoldPhase,
     runGeneratePhase: mockRunGeneratePhase,
+    runRegenerateFilePhase: mockRunRegenerateFilePhase,
     runVerificationPhase: mockRunVerificationPhase,
   };
 });
@@ -171,6 +174,25 @@ describe('RepoMigration', () => {
       issues: [],
       fixedFilesApplied: 0,
     });
+
+    mockRunRegenerateFilePhase.mockImplementation(
+      async (input: {
+        targetPath: string;
+        onFileStart: (path: string) => void;
+        onFileChunk: (path: string, content: string) => void;
+        onFileGenerated: (path: string, content: string) => void;
+      }) => {
+        input.onFileStart(input.targetPath);
+        input.onFileChunk(
+          input.targetPath,
+          'export default function Page() {\n  return <main>Updated',
+        );
+        input.onFileGenerated(
+          input.targetPath,
+          'export default function Page() { return <main>Updated via regenerate</main>; }',
+        );
+      },
+    );
 
     mockGenerateReport.mockReturnValue({
       duration: '00:00:05',
@@ -298,5 +320,82 @@ describe('RepoMigration', () => {
     });
 
     expect(mockGenerateReport).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows editing generated target file content inline', async () => {
+    render(<RepoMigration />);
+
+    fireEvent.change(
+      screen.getByPlaceholderText('https://github.com/username/repository'),
+      {
+        target: { value: 'https://github.com/example-org/legacy-app' },
+      },
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Analyze Repo/i }));
+
+    await waitFor(() => {
+      expect(mockRunAnalyzePhase).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Configure & Build/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Start Migration/i }));
+
+    await waitFor(() => {
+      expect(mockRunGeneratePhase).toHaveBeenCalledTimes(1);
+    });
+
+    const editor = await screen.findByTestId('code-editor-mock');
+    expect(editor).not.toBeDisabled();
+
+    fireEvent.change(editor, {
+      target: {
+        value:
+          'export default function Page() { return <main>Edited manually</main>; }',
+      },
+    });
+
+    expect(editor).toHaveValue(
+      'export default function Page() { return <main>Edited manually</main>; }',
+    );
+  });
+
+  it('regenerates a single target file with optional instructions', async () => {
+    const promptSpy = vi
+      .spyOn(window, 'prompt')
+      .mockReturnValue('Use server component style');
+
+    render(<RepoMigration />);
+
+    fireEvent.change(
+      screen.getByPlaceholderText('https://github.com/username/repository'),
+      {
+        target: { value: 'https://github.com/example-org/legacy-app' },
+      },
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Analyze Repo/i }));
+
+    await waitFor(() => {
+      expect(mockRunAnalyzePhase).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Configure & Build/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Start Migration/i }));
+
+    await waitFor(() => {
+      expect(mockRunGeneratePhase).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Regenerate File/i }));
+
+    await waitFor(() => {
+      expect(mockRunRegenerateFilePhase).toHaveBeenCalledWith(
+        expect.objectContaining({
+          targetPath: 'app/page.tsx',
+          userInstructions: 'Use server component style',
+        }),
+      );
+    });
+
+    promptSpy.mockRestore();
   });
 });

@@ -28,6 +28,7 @@ const mockFiles: FileNode[] = [
 describe('FileExplorer', () => {
   const mockOnSelectFile = vi.fn();
   const mockOnToggleTree = vi.fn();
+  const mockOnRegenerateFile = vi.fn();
 
   it('renders files and directories', () => {
     render(
@@ -37,6 +38,7 @@ describe('FileExplorer', () => {
         selectedFile={null}
         activeTree="source"
         onToggleTree={mockOnToggleTree}
+        onRegenerateFile={mockOnRegenerateFile}
       />,
     );
 
@@ -54,6 +56,7 @@ describe('FileExplorer', () => {
         selectedFile={null}
         activeTree="source"
         onToggleTree={mockOnToggleTree}
+        onRegenerateFile={mockOnRegenerateFile}
       />,
     );
 
@@ -69,6 +72,7 @@ describe('FileExplorer', () => {
         selectedFile={null}
         activeTree="source"
         onToggleTree={mockOnToggleTree}
+        onRegenerateFile={mockOnRegenerateFile}
       />,
     );
 
@@ -84,10 +88,31 @@ describe('FileExplorer', () => {
         selectedFile="README.md"
         activeTree="source"
         onToggleTree={mockOnToggleTree}
+        onRegenerateFile={mockOnRegenerateFile}
       />,
     );
     // We can check for a class that indicates selection
     const readme = screen.getByText('README.md').closest('div');
     expect(readme).toHaveClass('border-accent-500'); // Based on FileItem implementation
+  });
+
+  it('shows context action and regenerates a target file on right-click', () => {
+    render(
+      <FileExplorer
+        files={mockFiles}
+        onSelectFile={mockOnSelectFile}
+        selectedFile={null}
+        activeTree="target"
+        onToggleTree={mockOnToggleTree}
+        onRegenerateFile={mockOnRegenerateFile}
+      />,
+    );
+
+    fireEvent.contextMenu(screen.getByText('README.md'));
+    fireEvent.click(
+      screen.getByRole('button', { name: /Regenerate this file/i }),
+    );
+
+    expect(mockOnRegenerateFile).toHaveBeenCalledWith('README.md');
   });
 });
