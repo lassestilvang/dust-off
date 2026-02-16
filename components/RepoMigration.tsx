@@ -107,9 +107,9 @@ const RepoMigration: React.FC = () => {
 
   const rateLimitResetLabel = state.githubRateLimit?.resetAt
     ? new Date(state.githubRateLimit.resetAt).toLocaleTimeString([], {
-      hour: '2-digit',
-      minute: '2-digit',
-    })
+        hour: '2-digit',
+        minute: '2-digit',
+      })
     : 'n/a';
 
   const selectedIncludeSet = new Set(state.includeDirectories);
@@ -127,9 +127,9 @@ const RepoMigration: React.FC = () => {
   const generationPercent =
     state.generationProgress && state.generationProgress.total > 0
       ? Math.round(
-        (state.generationProgress.current / state.generationProgress.total) *
-        100,
-      )
+          (state.generationProgress.current / state.generationProgress.total) *
+            100,
+        )
       : 0;
 
   const canCopyGeneratedCode = Boolean(
@@ -506,7 +506,8 @@ const RepoMigration: React.FC = () => {
             )}
             {!showRepoUrlError && (
               <p className="text-xs text-gray-500">
-                Paste any public GitHub repository link. We will normalize it for you.
+                Paste any public GitHub repository link. We will normalize it
+                for you.
               </p>
             )}
             {state.status === AgentStatus.ERROR && (
@@ -636,10 +637,11 @@ const RepoMigration: React.FC = () => {
                 disabled={isAnalyzeDisabled}
                 className={`
                         flex items-center justify-center gap-2 py-2 px-4 rounded-lg font-bold text-sm transition-all whitespace-nowrap w-full md:w-auto
-                        ${!isAnalyzed && !isAnalyzeDisabled
-                    ? 'bg-accent-600 hover:bg-accent-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.3)]'
-                    : 'bg-dark-700 hover:bg-dark-600 text-gray-300 border border-dark-600'
-                  }
+                        ${
+                          !isAnalyzed && !isAnalyzeDisabled
+                            ? 'bg-accent-600 hover:bg-accent-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.3)]'
+                            : 'bg-dark-700 hover:bg-dark-600 text-gray-300 border border-dark-600'
+                        }
                         ${isAnalyzeDisabled ? 'opacity-70 cursor-not-allowed' : ''}
                         `}
               >
@@ -691,15 +693,16 @@ const RepoMigration: React.FC = () => {
                   }
                   className={`
                             flex items-center justify-center gap-2 py-2 px-6 rounded-lg font-bold text-sm transition-all whitespace-nowrap w-full md:w-auto
-                            ${isAnalyzed
-                      ? 'bg-accent-600 hover:bg-accent-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.3)] animate-in fade-in zoom-in-95'
-                      : 'bg-dark-800 text-gray-600 cursor-not-allowed border border-dark-700'
-                    }
+                            ${
+                              isAnalyzed
+                                ? 'bg-accent-600 hover:bg-accent-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.3)] animate-in fade-in zoom-in-95'
+                                : 'bg-dark-800 text-gray-600 cursor-not-allowed border border-dark-700'
+                            }
                             `}
                 >
                   {isPreparingPlan ||
-                    state.status === AgentStatus.CONVERTING ||
-                    state.status === AgentStatus.VERIFYING ? (
+                  state.status === AgentStatus.CONVERTING ||
+                  state.status === AgentStatus.VERIFYING ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
                     <GitBranch className="w-4 h-4" />
@@ -834,7 +837,7 @@ const RepoMigration: React.FC = () => {
                 ) : (
                   <div className="w-48 h-28 bg-dark-900 rounded-lg border border-dark-600 border-dashed flex flex-col items-center justify-center text-gray-500 gap-2">
                     {state.status === AgentStatus.ANALYZING ||
-                      state.status === AgentStatus.PLANNING ? (
+                    state.status === AgentStatus.PLANNING ? (
                       <>
                         <Loader2 className="w-5 h-5 animate-spin text-accent-500" />
                         <span className="text-xs">Generating Diagram...</span>
@@ -958,12 +961,13 @@ const RepoMigration: React.FC = () => {
                           {canCopyGeneratedCode && (
                             <button
                               onClick={() => void copyGeneratedCode()}
-                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border transition-colors ${copyStatus === 'copied'
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border transition-colors ${
+                                copyStatus === 'copied'
                                   ? 'text-green-200 bg-green-900/30 border-green-500/40'
                                   : copyStatus === 'error'
                                     ? 'text-red-200 bg-red-900/30 border-red-500/40'
                                     : 'text-gray-200 bg-dark-800 border-dark-600 hover:bg-dark-700'
-                                }`}
+                              }`}
                             >
                               {copyStatus === 'copied' ? (
                                 <Check className="w-3.5 h-3.5" />
