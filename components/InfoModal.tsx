@@ -17,6 +17,7 @@ const InfoModal: React.FC<InfoModalProps> = ({ type, onClose }) => {
       >
         <button
           onClick={onClose}
+          aria-label="Close modal"
           className="absolute top-4 right-4 p-2 rounded-lg text-gray-400 hover:text-foreground-primary hover:bg-dark-800 transition-colors z-10"
         >
           <X className="w-5 h-5" />

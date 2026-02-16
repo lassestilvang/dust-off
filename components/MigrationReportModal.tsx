@@ -45,6 +45,7 @@ const MigrationReportModal: React.FC<MigrationReportModalProps> = ({
           </div>
           <button
             onClick={onClose}
+            aria-label="Close modal"
             className="p-2 hover:bg-dark-700 rounded-lg transition-colors text-gray-400 hover:text-foreground-primary"
           >
             <X className="w-6 h-6" />

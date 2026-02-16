@@ -83,6 +83,13 @@ const MigrationConfigModal: React.FC<MigrationConfigProps> = ({
               Customize the architecture for your new Next.js application.
             </p>
           </div>
+          <button
+            onClick={onCancel}
+            aria-label="Close modal"
+            className="p-2 rounded-lg text-gray-400 hover:text-foreground-primary hover:bg-dark-700 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
         {/* Content */}

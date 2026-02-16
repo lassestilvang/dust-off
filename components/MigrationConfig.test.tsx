@@ -50,10 +50,11 @@ describe('MigrationConfigModal', () => {
       />,
     );
 
+    fireEvent.click(screen.getByRole('button', { name: 'Close modal' }));
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     fireEvent.click(screen.getByRole('button', { name: /Generate Playbook/i }));
 
-    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(onCancel).toHaveBeenCalledTimes(2);
     expect(onConfirm).toHaveBeenCalledTimes(1);
   });
 });

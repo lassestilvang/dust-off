@@ -1039,17 +1039,21 @@ const RepoMigration: React.FC = () => {
       </div>
 
       {isDiagramOpen && state.diagram && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm animate-in fade-in duration-200 p-4 sm:p-8">
-          <div className="absolute top-4 right-4 z-50">
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 backdrop-blur-sm animate-in fade-in duration-200 p-4 sm:p-8"
+          onClick={() => setIsDiagramOpen(false)}
+        >
+          <div
+            className="relative w-full max-w-7xl max-h-full flex items-center justify-center overflow-auto rounded-lg shadow-2xl bg-dark-900 border border-dark-700"
+            onClick={(event) => event.stopPropagation()}
+          >
             <button
               onClick={() => setIsDiagramOpen(false)}
-              className="p-2 rounded-full bg-dark-800 text-foreground-primary hover:bg-dark-700 border border-dark-600 transition-colors"
+              aria-label="Close modal"
+              className="absolute top-3 right-3 z-20 p-2.5 rounded-full bg-black/70 text-white hover:bg-black/85 border border-white/20 transition-colors shadow-lg"
             >
-              <X className="w-6 h-6" />
+              <X className="w-5 h-5" />
             </button>
-          </div>
-
-          <div className="relative w-full max-w-7xl max-h-full flex items-center justify-center overflow-auto rounded-lg shadow-2xl bg-dark-900 border border-dark-700">
             <img
               src={state.diagram}
               alt="Architecture Diagram"
