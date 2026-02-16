@@ -61,10 +61,36 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="h-screen flex flex-col font-sans selection:bg-accent-500/30 overflow-hidden bg-dark-900">
+    <div className="h-screen flex flex-col font-sans selection:bg-accent-500/30 overflow-hidden bg-dark-900 relative">
+      {/* Code Rain — fixed full-page background */}
+      <div
+        className="fixed inset-0 overflow-hidden opacity-[0.04] pointer-events-none select-none z-0"
+        aria-hidden="true"
+      >
+        <div className="absolute inset-0 flex justify-around font-mono text-[10px] text-accent-400 leading-relaxed whitespace-nowrap">
+          {Array.from({ length: 20 }).map((_, col) => (
+            <div
+              key={col}
+              className="flex flex-col gap-1 shrink-0"
+              style={{
+                animation: `codeRainFall ${14 + (col % 7) * 3}s linear infinite`,
+                animationDelay: `${col * -1.2}s`,
+              }}
+            >
+              {/* Repeat chars enough times to fill tall screens */}
+              {Array.from({ length: 6 }).flatMap((_, rep) =>
+                CODE_RAIN_CHARS.map((char, i) => (
+                  <span key={`${rep}-${i}`}>{char}</span>
+                )),
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
       <Header theme={theme} onToggleTheme={toggleTheme} />
 
-      <main className="flex-1 w-full max-w-[1600px] mx-auto px-4 py-4 flex flex-col gap-4 min-h-0">
+      <main className="relative z-10 flex-1 w-full max-w-[1600px] mx-auto px-4 py-4 flex flex-col gap-4 min-h-0">
         {!hasConfiguredGeminiApiKey && (
           <div
             role="alert"
@@ -80,35 +106,7 @@ const App: React.FC = () => {
 
         {/* Hero Section */}
         <div className="relative shrink-0 animate-in fade-in slide-in-from-top-4 duration-700 rounded-xl border border-dark-700/30 overflow-hidden">
-          {/* Code Rain Background */}
-          <div
-            className="absolute inset-0 overflow-hidden opacity-[0.06] pointer-events-none select-none"
-            aria-hidden="true"
-          >
-            <div
-              className="absolute inset-0 flex gap-6 font-mono text-[10px] text-accent-400 leading-relaxed whitespace-nowrap"
-              style={{
-                animation: 'codeRainScroll 25s linear infinite',
-              }}
-            >
-              {Array.from({ length: 8 }).map((_, col) => (
-                <div
-                  key={col}
-                  className="flex flex-col gap-1"
-                  style={{
-                    animation: `codeRainFall ${12 + col * 2}s linear infinite`,
-                    animationDelay: `${col * -1.5}s`,
-                  }}
-                >
-                  {CODE_RAIN_CHARS.map((char, i) => (
-                    <span key={i}>{char}</span>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-4 bg-dark-800/40 p-4">
+          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-4 bg-dark-800 p-4">
             <div className="text-left flex-1">
               <h2 className="text-lg font-bold tracking-tight flex items-center gap-2 font-display">
                 <span className="text-foreground-primary">

@@ -41,11 +41,11 @@ const Header: React.FC<HeaderProps> = ({ theme, onToggleTheme }) => {
               aria-label={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
               title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} theme`}
             >
-              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-accent-500/70">
-                <Sun className="w-3.5 h-3.5" />
-              </span>
-              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-400/70">
+              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-blue-400/70">
                 <Moon className="w-3.5 h-3.5" />
+              </span>
+              <span className="absolute right-2 top-1/2 -translate-y-1/2 text-accent-500/70">
+                <Sun className="w-3.5 h-3.5" />
               </span>
               <span
                 className={`absolute top-1 h-8 w-8 rounded-full border border-dark-600 bg-dark-900 shadow-[0_6px_16px_rgba(0,0,0,0.22)] transition-transform duration-300 ease-out flex items-center justify-center ${

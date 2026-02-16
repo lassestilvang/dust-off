@@ -187,23 +187,23 @@
 
 ## 📊 Priority Matrix
 
-| Priority | Feature                             | Impact | Effort  |
-| -------- | ----------------------------------- | ------ | ------- |
-| 🔴 P0    | #1 Extract RepoMigration into hooks | High   | Medium  |
-| 🔴 P0    | #5 GitHub PAT / auth support        | High   | Low     |
-| 🔴 P0    | #6 Cancel migration                 | High   | Low     |
-| 🔴 P0    | #2 Proper Tailwind build            | Medium | Low     |
-| 🟡 P1    | #8 Side-by-side diff view           | High   | Medium  |
-| 🟡 P1    | #7 Streaming generation             | High   | Medium  |
-| 🟡 P1    | #10 Per-file regeneration           | High   | Low     |
-| 🟡 P1    | #21 Progress bar                    | Medium | Low     |
-| 🟡 P1    | #12 Post-gen verification           | High   | Medium  |
-| 🟡 P1    | #13 Topological gen ordering        | Medium | Low     |
-| 🟢 P2    | #9 Editable output                  | Medium | Low     |
-| 🟢 P2    | #24 Copy to clipboard               | Medium | Trivial |
-| 🟢 P2    | #20 Session persistence             | Medium | Low     |
-| 🟢 P2    | #11 Multiple target frameworks      | High   | High    |
-| 🟢 P2    | #32 Migration plan review           | High   | Medium  |
-| 🔵 P3    | #31 GitHub PR integration           | High   | High    |
-| 🔵 P3    | #33 Human-in-the-loop               | High   | High    |
-| 🔵 P3    | #27 E2E tests                       | Medium | Medium  |
+| Priority | Feature                                 | Impact | Effort  |
+| -------- | --------------------------------------- | ------ | ------- |
+| 🔴 P0    | [x] #1 Extract RepoMigration into hooks | High   | Medium  |
+| 🔴 P0    | [ ] #5 GitHub PAT / auth support        | High   | Low     |
+| 🔴 P0    | [x] #6 Cancel migration                 | High   | Low     |
+| 🔴 P0    | [x] #2 Proper Tailwind build            | Medium | Low     |
+| 🟡 P1    | [ ] #8 Side-by-side diff view           | High   | Medium  |
+| 🟡 P1    | [x] #7 Streaming generation             | High   | Medium  |
+| 🟡 P1    | [x] #10 Per-file regeneration           | High   | Low     |
+| 🟡 P1    | [x] #21 Progress bar                    | Medium | Low     |
+| 🟡 P1    | [x] #12 Post-gen verification           | High   | Medium  |
+| 🟡 P1    | [x] #13 Topological gen ordering        | Medium | Low     |
+| 🟢 P2    | [x] #9 Editable output                  | Medium | Low     |
+| 🟢 P2    | [x] #24 Copy to clipboard               | Medium | Trivial |
+| 🟢 P2    | [x] #20 Session persistence             | Medium | Low     |
+| 🟢 P2    | [ ] #11 Multiple target frameworks      | High   | High    |
+| 🟢 P2    | [ ] #32 Migration plan review           | High   | Medium  |
+| 🔵 P3    | [ ] #31 GitHub PR integration           | High   | High    |
+| 🔵 P3    | [ ] #33 Human-in-the-loop               | High   | High    |
+| 🔵 P3    | [ ] #27 E2E tests                       | Medium | Medium  |
