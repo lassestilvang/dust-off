@@ -13,6 +13,9 @@ import {
   GitHubRateLimitInfo,
   LogEntry,
   MigrationConfig,
+  MigrationCostEstimate,
+  MigrationHistoryEntry,
+  MigrationPlaybook,
   MigrationReport,
   RepoAnalysisResult,
   RepoScopeInfo,
@@ -28,6 +31,7 @@ import {
   isImageFile,
   runAnalyzePhase,
   runGeneratePhase,
+  runPlanReviewPhase,
   runRegenerateFilePhase,
   runScaffoldPhase,
   runVerificationPhase,
@@ -71,10 +75,17 @@ const initialRepoState: RepoState = {
   githubRateLimit: null,
   repoScope: null,
   generationProgress: null,
+  playbook: null,
+  playbookNotes: '',
+  clarificationAnswers: {},
+  costEstimate: null,
+  history: [],
+  awaitingPlanApproval: false,
 };
 
 const REPO_STATE_STORAGE_KEY = 'dustoff.repo-state.v1';
 const MAX_PERSISTED_LOGS = 250;
+const MAX_HISTORY_ENTRIES = 20;
 
 const normalizeDirectories = (directories: string[]): string[] => {
   return Array.from(
@@ -110,6 +121,12 @@ interface PersistedRepoState {
   githubRateLimit: GitHubRateLimitInfo | null;
   repoScope: RepoScopeInfo | null;
   generationProgress: GenerationProgress | null;
+  playbook: MigrationPlaybook | null;
+  playbookNotes: string;
+  clarificationAnswers: Record<string, string>;
+  costEstimate: MigrationCostEstimate | null;
+  history: MigrationHistoryEntry[];
+  awaitingPlanApproval: boolean;
 }
 
 interface GenerationContextCache {
@@ -167,6 +184,12 @@ const serializeRepoState = (state: RepoState): PersistedRepoState => {
     githubRateLimit: state.githubRateLimit,
     repoScope: state.repoScope,
     generationProgress: state.generationProgress,
+    playbook: state.playbook,
+    playbookNotes: state.playbookNotes,
+    clarificationAnswers: state.clarificationAnswers,
+    costEstimate: state.costEstimate,
+    history: state.history,
+    awaitingPlanApproval: state.awaitingPlanApproval,
   };
 };
 
@@ -178,10 +201,40 @@ const toStringArray = (value: unknown): string[] => {
   return value.filter((item): item is string => typeof item === 'string');
 };
 
+const toStringRecord = (value: unknown): Record<string, string> => {
+  if (!value || typeof value !== 'object') {
+    return {};
+  }
+
+  return Object.entries(value as Record<string, unknown>).reduce<
+    Record<string, string>
+  >((result, [key, entryValue]) => {
+    if (typeof entryValue === 'string') {
+      result[key] = entryValue;
+    }
+    return result;
+  }, {});
+};
+
 const parsePersistedState = (
   payload: PersistedRepoState,
   fallback: RepoState,
 ): RepoState => {
+  const history = Array.isArray(payload.history)
+    ? payload.history
+        .filter(
+          (entry): entry is MigrationHistoryEntry =>
+            Boolean(entry) &&
+            typeof entry.id === 'string' &&
+            typeof entry.timestamp === 'number' &&
+            typeof entry.repoUrl === 'string' &&
+            (entry.complexity === 'Low' ||
+              entry.complexity === 'Medium' ||
+              entry.complexity === 'High'),
+        )
+        .slice(-20)
+    : fallback.history;
+
   return {
     ...fallback,
     url: typeof payload.url === 'string' ? payload.url : fallback.url,
@@ -232,6 +285,13 @@ const parsePersistedState = (
     githubRateLimit: payload.githubRateLimit || null,
     repoScope: payload.repoScope || null,
     generationProgress: payload.generationProgress || null,
+    playbook: payload.playbook || null,
+    playbookNotes:
+      typeof payload.playbookNotes === 'string' ? payload.playbookNotes : '',
+    clarificationAnswers: toStringRecord(payload.clarificationAnswers),
+    costEstimate: payload.costEstimate || null,
+    history,
+    awaitingPlanApproval: Boolean(payload.awaitingPlanApproval),
     startTime: undefined,
   };
 };
@@ -255,6 +315,69 @@ const initializeRepoState = (fallback: RepoState): RepoState => {
   }
 };
 
+const buildPlaybookDecisionContext = (
+  playbook: MigrationPlaybook | null,
+  answers: Record<string, string>,
+  notes: string,
+): string => {
+  if (!playbook) {
+    return '';
+  }
+
+  const questionBlock = playbook.questions
+    .map((question, index) => {
+      const selected =
+        answers[question.id]?.trim() ||
+        question.recommendedOption ||
+        question.options[0] ||
+        '';
+      return `${index + 1}. ${question.question}\nSelected: ${selected}`;
+    })
+    .join('\n\n');
+
+  const instructions = notes.trim();
+
+  return [
+    '--- APPROVED MIGRATION PLAYBOOK ---',
+    `Objective: ${playbook.objective}`,
+    `Overview: ${playbook.overview}`,
+    'Execution Plan:',
+    ...playbook.executionPlan.map((step, index) => `${index + 1}. ${step}`),
+    questionBlock ? `Clarification Decisions:\n${questionBlock}` : '',
+    instructions ? `User Guidance:\n${instructions}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
+};
+
+const createHistoryEntry = ({
+  state,
+  report,
+  endTime,
+}: {
+  state: RepoState;
+  report: MigrationReport;
+  endTime: number;
+}): MigrationHistoryEntry => {
+  const durationMs = Math.max(1, endTime - (state.startTime || endTime));
+  const durationSeconds = Math.max(1, Math.round(durationMs / 1000));
+
+  return {
+    id: `run_${endTime}_${Math.random().toString(36).slice(2, 8)}`,
+    timestamp: endTime,
+    repoUrl: state.url,
+    sourceFramework: state.analysis?.detectedFramework || 'Unknown',
+    complexity: state.analysis?.complexity || 'Medium',
+    sourceFiles: report.totalFiles,
+    generatedFiles: report.filesGenerated,
+    durationSeconds,
+    modernizationScore: report.modernizationScore,
+    estimatedCostUsd: state.costEstimate?.estimatedCostUsd || 0,
+    estimatedTokens: state.costEstimate?.totalTokens || 0,
+    config: state.config,
+  };
+};
+
 type RepoAction =
   | { type: 'set_url'; payload: string }
   | { type: 'set_status'; payload: AgentStatus }
@@ -268,6 +391,16 @@ type RepoAction =
   | { type: 'set_generation_progress'; payload: GenerationProgress | null }
   | { type: 'set_diagram'; payload: string | null }
   | { type: 'set_source_context'; payload: string }
+  | { type: 'set_playbook'; payload: MigrationPlaybook | null }
+  | { type: 'set_playbook_notes'; payload: string }
+  | {
+      type: 'set_clarification_answer';
+      payload: { questionId: string; answer: string };
+    }
+  | { type: 'set_clarification_answers'; payload: Record<string, string> }
+  | { type: 'set_cost_estimate'; payload: MigrationCostEstimate | null }
+  | { type: 'set_history'; payload: MigrationHistoryEntry[] }
+  | { type: 'set_awaiting_plan_approval'; payload: boolean }
   | { type: 'set_generated_files'; payload: FileNode[] }
   | { type: 'set_selected_file'; payload: string | null }
   | { type: 'set_active_tree'; payload: 'source' | 'target' }
@@ -334,6 +467,11 @@ const repoReducer = (state: RepoState, action: RepoAction): RepoState => {
         githubRateLimit: null,
         repoScope: null,
         generationProgress: null,
+        playbook: null,
+        playbookNotes: '',
+        clarificationAnswers: {},
+        costEstimate: null,
+        awaitingPlanApproval: false,
         startTime: Date.now(),
       };
 
@@ -386,6 +524,42 @@ const repoReducer = (state: RepoState, action: RepoAction): RepoState => {
     case 'set_source_context':
       return { ...state, sourceContext: action.payload };
 
+    case 'set_playbook':
+      return {
+        ...state,
+        playbook: action.payload,
+      };
+
+    case 'set_playbook_notes':
+      return {
+        ...state,
+        playbookNotes: action.payload,
+      };
+
+    case 'set_clarification_answer':
+      return {
+        ...state,
+        clarificationAnswers: {
+          ...state.clarificationAnswers,
+          [action.payload.questionId]: action.payload.answer,
+        },
+      };
+
+    case 'set_clarification_answers':
+      return {
+        ...state,
+        clarificationAnswers: action.payload,
+      };
+
+    case 'set_cost_estimate':
+      return { ...state, costEstimate: action.payload };
+
+    case 'set_history':
+      return { ...state, history: action.payload };
+
+    case 'set_awaiting_plan_approval':
+      return { ...state, awaitingPlanApproval: action.payload };
+
     case 'set_generated_files':
       return {
         ...state,
@@ -403,7 +577,16 @@ const repoReducer = (state: RepoState, action: RepoAction): RepoState => {
       return { ...state, report: action.payload };
 
     case 'set_config':
-      return { ...state, config: action.payload };
+      return {
+        ...state,
+        status: AgentStatus.IDLE,
+        config: action.payload,
+        playbook: null,
+        playbookNotes: '',
+        clarificationAnswers: {},
+        costEstimate: null,
+        awaitingPlanApproval: false,
+      };
 
     case 'add_log':
       return { ...state, logs: [...state.logs, action.payload] };
@@ -454,6 +637,8 @@ interface UseRepoMigrationResult {
   isAnalyzed: boolean;
   isWorking: boolean;
   isBusy: boolean;
+  isPreparingPlan: boolean;
+  isAwaitingPlanApproval: boolean;
   regeneratingFilePath: string | null;
   selectedNode: FileNode | null;
   setUrl: (url: string) => void;
@@ -464,6 +649,10 @@ interface UseRepoMigrationResult {
   startRepoProcess: () => Promise<void>;
   cancelCurrentRun: () => void;
   handleConfigConfirm: () => void;
+  approveMigrationPlan: () => Promise<void>;
+  setPlaybookNotes: (notes: string) => void;
+  setClarificationAnswer: (questionId: string, answer: string) => void;
+  clearHistory: () => void;
   handleDownload: () => Promise<void>;
   handleFileSelect: (path: string) => Promise<void>;
   handleGeneratedFileEdit: (path: string, content: string) => void;
@@ -675,7 +864,7 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
     }
   }, [addLog, ensureDiagramApiKey, handleGitHubRateLimitUpdate]);
 
-  const startMigration = useCallback(async () => {
+  const prepareMigrationPlan = useCallback(async () => {
     const currentState = stateRef.current;
 
     if (activeControllerRef.current) {
@@ -693,8 +882,14 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
     generationContextRef.current = null;
     setRegeneratingFilePath(null);
     dispatch({ type: 'set_generation_progress', payload: null });
-    dispatch({ type: 'set_status', payload: AgentStatus.CONVERTING });
+    dispatch({ type: 'set_playbook', payload: null });
+    dispatch({ type: 'set_playbook_notes', payload: '' });
+    dispatch({ type: 'set_clarification_answers', payload: {} });
+    dispatch({ type: 'set_cost_estimate', payload: null });
+    dispatch({ type: 'set_awaiting_plan_approval', payload: false });
+    dispatch({ type: 'set_status', payload: AgentStatus.PLANNING });
     cancelRequestedRef.current = false;
+
     const controller = new AbortController();
     activeControllerRef.current = controller;
 
@@ -726,11 +921,122 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
         payload: scaffoldResult.generatedFiles,
       });
 
-      const totalFilesToGenerate = flattenFiles(
-        scaffoldResult.generatedFiles,
-      ).filter((file) => file.type === 'file').length;
-      let startedFileCount = 0;
+      const planResult = await runPlanReviewPhase({
+        analysis: currentState.analysis,
+        generatedFilePaths: scaffoldResult.generatedFilePaths,
+        sourceContext: scaffoldResult.sourceContext,
+        config: currentState.config,
+        addLog,
+        abortSignal: controller.signal,
+      });
 
+      const initialAnswers = planResult.playbook.questions.reduce<
+        Record<string, string>
+      >((accumulator, question) => {
+        accumulator[question.id] =
+          question.recommendedOption || question.options[0] || '';
+        return accumulator;
+      }, {});
+
+      dispatch({
+        type: 'set_clarification_answers',
+        payload: initialAnswers,
+      });
+      dispatch({ type: 'set_playbook', payload: planResult.playbook });
+      dispatch({ type: 'set_cost_estimate', payload: planResult.costEstimate });
+      dispatch({ type: 'set_awaiting_plan_approval', payload: true });
+      dispatch({ type: 'set_status', payload: AgentStatus.IDLE });
+
+      addLog(
+        'Migration playbook prepared. Review the plan, adjust decisions, then approve generation.',
+        'success',
+        AgentStatus.PLANNING,
+      );
+    } catch (error: unknown) {
+      if (isAbortError(error)) {
+        if (!cancelRequestedRef.current) {
+          addLog('Operation cancelled.', 'warning', AgentStatus.IDLE);
+        }
+        dispatch({ type: 'set_status', payload: AgentStatus.IDLE });
+        return;
+      }
+
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      addLog(`Fatal Error: ${errorMessage}`, 'error', AgentStatus.ERROR);
+      dispatch({ type: 'set_status', payload: AgentStatus.ERROR });
+    } finally {
+      if (activeControllerRef.current === controller) {
+        activeControllerRef.current = null;
+      }
+      cancelRequestedRef.current = false;
+    }
+  }, [addLog, handleGitHubRateLimitUpdate]);
+
+  const approveMigrationPlan = useCallback(async () => {
+    const currentState = stateRef.current;
+
+    if (activeControllerRef.current) {
+      addLog(
+        'Another operation is already running. Wait for it to finish before starting a new run.',
+        'warning',
+      );
+      return;
+    }
+
+    if (
+      !currentState.analysis ||
+      !currentState.playbook ||
+      !currentState.awaitingPlanApproval
+    ) {
+      addLog(
+        'Prepare and review the migration playbook before starting.',
+        'warning',
+      );
+      return;
+    }
+
+    if (!generationContextRef.current) {
+      addLog(
+        'Planning context is unavailable. Run Configure & Build again to regenerate the playbook.',
+        'warning',
+      );
+      return;
+    }
+
+    const decisionContext = buildPlaybookDecisionContext(
+      currentState.playbook,
+      currentState.clarificationAnswers,
+      currentState.playbookNotes,
+    );
+    const enrichedSourceContext = decisionContext
+      ? `${generationContextRef.current.sourceContext}\n\n${decisionContext}`
+      : generationContextRef.current.sourceContext;
+
+    generationContextRef.current = {
+      ...generationContextRef.current,
+      sourceContext: enrichedSourceContext,
+    };
+
+    dispatch({
+      type: 'set_source_context',
+      payload: enrichedSourceContext,
+    });
+    dispatch({ type: 'set_awaiting_plan_approval', payload: false });
+    dispatch({ type: 'set_generation_progress', payload: null });
+    dispatch({ type: 'set_status', payload: AgentStatus.CONVERTING });
+
+    cancelRequestedRef.current = false;
+    const controller = new AbortController();
+    activeControllerRef.current = controller;
+
+    const generatedFiles = currentState.generatedFiles;
+    const totalFilesToGenerate = flattenFiles(generatedFiles).filter(
+      (file) => file.type === 'file',
+    ).length;
+    let startedFileCount = 0;
+
+    try {
       dispatch({
         type: 'set_generation_progress',
         payload: {
@@ -741,12 +1047,12 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
       });
 
       await runGeneratePhase({
-        generatedFiles: scaffoldResult.generatedFiles,
+        generatedFiles,
         analysis: currentState.analysis,
-        sourceContext: scaffoldResult.sourceContext,
-        fileContents: scaffoldResult.fileContents,
-        filesToRead: scaffoldResult.filesToRead,
-        graph: scaffoldResult.graph,
+        sourceContext: enrichedSourceContext,
+        fileContents: generationContextRef.current.fileContents,
+        filesToRead: generationContextRef.current.filesToRead,
+        graph: generationContextRef.current.graph,
         config: currentState.config,
         addLog,
         abortSignal: controller.signal,
@@ -805,7 +1111,7 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
       dispatch({ type: 'set_status', payload: AgentStatus.VERIFYING });
 
       const verificationResult = await runVerificationPhase({
-        generatedFiles: scaffoldResult.generatedFiles,
+        generatedFiles,
         analysis: currentState.analysis,
         addLog,
         abortSignal: controller.signal,
@@ -832,12 +1138,23 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
       const endTime = Date.now();
       const report = generateReport(
         currentState.files,
-        scaffoldResult.generatedFiles,
+        generatedFiles,
         currentState.startTime || Date.now(),
         endTime,
         currentState.analysis,
       );
+      const historyEntry = createHistoryEntry({
+        state: currentState,
+        report,
+        endTime,
+      });
 
+      dispatch({
+        type: 'set_history',
+        payload: [...currentState.history, historyEntry].slice(
+          -MAX_HISTORY_ENTRIES,
+        ),
+      });
       dispatch({ type: 'set_report', payload: report });
       dispatch({ type: 'set_status', payload: AgentStatus.COMPLETED });
       setShowReport(true);
@@ -853,8 +1170,10 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
         }
         dispatch({ type: 'set_generation_progress', payload: null });
         dispatch({ type: 'set_status', payload: AgentStatus.IDLE });
+        dispatch({ type: 'set_awaiting_plan_approval', payload: true });
         return;
       }
+
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       addLog(`Fatal Error: ${errorMessage}`, 'error', AgentStatus.ERROR);
@@ -866,12 +1185,30 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
       }
       cancelRequestedRef.current = false;
     }
-  }, [addLog, handleGitHubRateLimitUpdate]);
+  }, [addLog]);
 
   const handleConfigConfirm = useCallback(() => {
     setShowConfigModal(false);
-    void startMigration();
-  }, [startMigration]);
+    void prepareMigrationPlan();
+  }, [prepareMigrationPlan]);
+
+  const setPlaybookNotes = useCallback((notes: string) => {
+    dispatch({ type: 'set_playbook_notes', payload: notes });
+  }, []);
+
+  const setClarificationAnswer = useCallback(
+    (questionId: string, answer: string) => {
+      dispatch({
+        type: 'set_clarification_answer',
+        payload: { questionId, answer },
+      });
+    },
+    [],
+  );
+
+  const clearHistory = useCallback(() => {
+    dispatch({ type: 'set_history', payload: [] });
+  }, []);
 
   const handleDownload = useCallback(async () => {
     const { generatedFiles } = stateRef.current;
@@ -1125,6 +1462,9 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
   }, [state.activeTree, state.files, state.generatedFiles, state.selectedFile]);
 
   const isAnalyzed = Boolean(state.analysis);
+  const isPreparingPlan =
+    state.status === AgentStatus.PLANNING && !state.awaitingPlanApproval;
+  const isAwaitingPlanApproval = state.awaitingPlanApproval;
   const isWorking =
     state.status !== AgentStatus.IDLE &&
     state.status !== AgentStatus.COMPLETED &&
@@ -1133,7 +1473,8 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
   const isBusy =
     state.status === AgentStatus.ANALYZING ||
     state.status === AgentStatus.CONVERTING ||
-    state.status === AgentStatus.VERIFYING;
+    state.status === AgentStatus.VERIFYING ||
+    isPreparingPlan;
 
   return {
     state,
@@ -1146,6 +1487,8 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
     isAnalyzed,
     isWorking,
     isBusy,
+    isPreparingPlan,
+    isAwaitingPlanApproval,
     regeneratingFilePath,
     selectedNode,
     setUrl,
@@ -1156,6 +1499,10 @@ export const useRepoMigration = (): UseRepoMigrationResult => {
     startRepoProcess,
     cancelCurrentRun,
     handleConfigConfirm,
+    approveMigrationPlan,
+    setPlaybookNotes,
+    setClarificationAnswer,
+    clearHistory,
     handleDownload,
     handleFileSelect,
     handleGeneratedFileEdit,

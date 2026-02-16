@@ -29,6 +29,8 @@ import FileExplorer from './FileExplorer';
 import CodeEditor from './CodeEditor';
 import MigrationReportModal from './MigrationReportModal';
 import MigrationConfigModal from './MigrationConfig';
+import MigrationPlaybookPanel from './MigrationPlaybookPanel';
+import MigrationHistoryDashboard from './MigrationHistoryDashboard';
 import { NextjsIcon, ReactIcon, VueIcon, PythonIcon, PhpIcon } from './Icons';
 import { AgentStatus, FileNode } from '../types';
 import { useRepoMigration, isImageFile } from '../hooks/useRepoMigration';
@@ -81,6 +83,8 @@ const RepoMigration: React.FC = () => {
     isAnalyzed,
     isWorking,
     isBusy,
+    isPreparingPlan,
+    isAwaitingPlanApproval,
     regeneratingFilePath,
     selectedNode,
     setUrl,
@@ -91,6 +95,10 @@ const RepoMigration: React.FC = () => {
     startRepoProcess,
     cancelCurrentRun,
     handleConfigConfirm,
+    approveMigrationPlan,
+    setPlaybookNotes,
+    setClarificationAnswer,
+    clearHistory,
     handleDownload,
     handleFileSelect,
     handleGeneratedFileEdit,
@@ -132,6 +140,8 @@ const RepoMigration: React.FC = () => {
     selectedNode.content,
   );
   const canRegenerateGeneratedCode = Boolean(
+    (state.status === AgentStatus.COMPLETED ||
+      state.status === AgentStatus.VERIFYING) &&
     state.activeTree === 'target' &&
     selectedNode &&
     selectedNode.type === 'file' &&
@@ -220,6 +230,13 @@ const RepoMigration: React.FC = () => {
     void startRepoProcess();
   }, [isAnalyzeDisabled, startRepoProcess]);
 
+  const handleApprovePlan = React.useCallback(() => {
+    if (!isAwaitingPlanApproval) {
+      return;
+    }
+    void approveMigrationPlan();
+  }, [approveMigrationPlan, isAwaitingPlanApproval]);
+
   const handleRegenerateClick = React.useCallback(() => {
     if (
       !(
@@ -245,6 +262,13 @@ const RepoMigration: React.FC = () => {
 
   const handleRegenerateFromExplorer = React.useCallback(
     (path: string) => {
+      if (
+        state.status !== AgentStatus.COMPLETED &&
+        state.status !== AgentStatus.VERIFYING
+      ) {
+        return;
+      }
+
       const instructions = window.prompt(
         `Optional instructions for regenerating ${path} (leave blank to use defaults).`,
         '',
@@ -256,7 +280,7 @@ const RepoMigration: React.FC = () => {
 
       void regenerateTargetFile(path, instructions);
     },
-    [regenerateTargetFile],
+    [regenerateTargetFile, state.status],
   );
 
   React.useEffect(() => {
@@ -300,7 +324,13 @@ const RepoMigration: React.FC = () => {
           return;
         }
 
+        if (isAwaitingPlanApproval) {
+          void approveMigrationPlan();
+          return;
+        }
+
         if (
+          state.status === AgentStatus.PLANNING ||
           state.status === AgentStatus.CONVERTING ||
           state.status === AgentStatus.VERIFYING
         ) {
@@ -368,7 +398,9 @@ const RepoMigration: React.FC = () => {
     activeFilePaths,
     handleConfigConfirm,
     handleFileSelect,
+    approveMigrationPlan,
     isAnalyzed,
+    isAwaitingPlanApproval,
     isBusy,
     isRepoUrlValid,
     isDiagramOpen,
@@ -654,6 +686,7 @@ const RepoMigration: React.FC = () => {
                   onClick={() => setShowConfigModal(true)}
                   disabled={
                     !isAnalyzed ||
+                    isPreparingPlan ||
                     state.status === AgentStatus.CONVERTING ||
                     state.status === AgentStatus.VERIFYING
                   }
@@ -666,17 +699,22 @@ const RepoMigration: React.FC = () => {
                             }
                             `}
                 >
-                  {state.status === AgentStatus.CONVERTING ||
+                  {isPreparingPlan ||
+                  state.status === AgentStatus.CONVERTING ||
                   state.status === AgentStatus.VERIFYING ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
                     <GitBranch className="w-4 h-4" />
                   )}
-                  {state.status === AgentStatus.CONVERTING
-                    ? 'Building Project...'
-                    : state.status === AgentStatus.VERIFYING
-                      ? 'Verifying Output...'
-                      : 'Configure & Build'}
+                  {isPreparingPlan
+                    ? 'Preparing Playbook...'
+                    : state.status === AgentStatus.CONVERTING
+                      ? 'Building Project...'
+                      : state.status === AgentStatus.VERIFYING
+                        ? 'Verifying Output...'
+                        : isAwaitingPlanApproval
+                          ? 'Playbook Ready'
+                          : 'Configure & Build'}
                 </button>
               )}
               {isBusy && (
@@ -817,6 +855,37 @@ const RepoMigration: React.FC = () => {
             </div>
           )}
         </div>
+
+        {isPreparingPlan && !state.playbook && (
+          <div className="rounded-xl border border-accent-500/30 bg-accent-900/10 p-4 flex items-center gap-3 text-sm text-accent-100">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            Preparing migration playbook, scaffold, and cost estimate...
+          </div>
+        )}
+
+        {isAwaitingPlanApproval && state.playbook && (
+          <MigrationPlaybookPanel
+            playbook={state.playbook}
+            costEstimate={state.costEstimate}
+            answers={state.clarificationAnswers}
+            notes={state.playbookNotes}
+            isStartingGeneration={
+              state.status === AgentStatus.CONVERTING ||
+              state.status === AgentStatus.VERIFYING
+            }
+            onAnswerChange={setClarificationAnswer}
+            onNotesChange={setPlaybookNotes}
+            onApprove={handleApprovePlan}
+            onOpenConfig={() => setShowConfigModal(true)}
+          />
+        )}
+
+        {state.history.length > 0 && (
+          <MigrationHistoryDashboard
+            history={state.history}
+            onClearHistory={clearHistory}
+          />
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-12 gap-4 flex-1 min-h-0">
           <div className="md:col-span-12 lg:col-span-4 flex flex-col h-full min-h-0 order-3 lg:order-1">

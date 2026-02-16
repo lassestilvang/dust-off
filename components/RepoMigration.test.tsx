@@ -5,6 +5,7 @@ const {
   mockValidateGeminiApiKey,
   mockRunAnalyzePhase,
   mockRunScaffoldPhase,
+  mockRunPlanReviewPhase,
   mockRunGeneratePhase,
   mockRunRegenerateFilePhase,
   mockRunVerificationPhase,
@@ -13,6 +14,7 @@ const {
   mockValidateGeminiApiKey: vi.fn(),
   mockRunAnalyzePhase: vi.fn(),
   mockRunScaffoldPhase: vi.fn(),
+  mockRunPlanReviewPhase: vi.fn(),
   mockRunGeneratePhase: vi.fn(),
   mockRunRegenerateFilePhase: vi.fn(),
   mockRunVerificationPhase: vi.fn(),
@@ -73,6 +75,7 @@ vi.mock('../services/migrationOrchestrator', () => {
       /\.(png|jpg|jpeg|gif|ico|svg|webp|bmp)$/i.test(filename),
     runAnalyzePhase: mockRunAnalyzePhase,
     runScaffoldPhase: mockRunScaffoldPhase,
+    runPlanReviewPhase: mockRunPlanReviewPhase,
     runGeneratePhase: mockRunGeneratePhase,
     runRegenerateFilePhase: mockRunRegenerateFilePhase,
     runVerificationPhase: mockRunVerificationPhase,
@@ -152,6 +155,44 @@ describe('RepoMigration', () => {
           ],
         },
       ],
+    });
+
+    mockRunPlanReviewPhase.mockResolvedValue({
+      playbook: {
+        overview: 'Plan review before generation.',
+        objective: 'Migrate React repo to Next.js App Router.',
+        conversionHighlights: ['Convert pages to App Router routes'],
+        executionPlan: ['Scaffold', 'Generate files', 'Verify output'],
+        targetArtifacts: ['app/page.tsx'],
+        riskMitigations: ['Keep auth flow unchanged in first pass'],
+        questions: [
+          {
+            id: 'auth_strategy',
+            title: 'Auth Strategy',
+            question: 'Should custom auth remain custom?',
+            options: ['Keep custom auth', 'Use NextAuth'],
+            recommendedOption: 'Keep custom auth',
+            rationale: 'Lower initial risk.',
+            required: true,
+          },
+        ],
+      },
+      costEstimate: {
+        inputTokens: 5000,
+        outputTokens: 1500,
+        totalTokens: 6500,
+        estimatedCostUsd: 0.0123,
+        assumptions: ['heuristic'],
+        stageBreakdown: [
+          {
+            stage: 'Scaffold Design',
+            model: 'gemini-3-pro-preview',
+            inputTokens: 1000,
+            outputTokens: 300,
+            estimatedCostUsd: 0.004,
+          },
+        ],
+      },
     });
 
     mockRunGeneratePhase.mockImplementation(
@@ -301,11 +342,19 @@ describe('RepoMigration', () => {
 
     expect(screen.getByText('Configure Stack')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /Start Migration/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Generate Playbook/i }));
 
     await waitFor(() => {
       expect(mockRunScaffoldPhase).toHaveBeenCalledTimes(1);
     });
+
+    await waitFor(() => {
+      expect(mockRunPlanReviewPhase).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /Approve & Start Generation/i }),
+    );
 
     await waitFor(() => {
       expect(mockRunGeneratePhase).toHaveBeenCalledTimes(1);
@@ -320,6 +369,72 @@ describe('RepoMigration', () => {
     });
 
     expect(mockGenerateReport).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows playbook review and estimated cost before generation', async () => {
+    render(<RepoMigration />);
+
+    fireEvent.change(
+      screen.getByPlaceholderText('https://github.com/username/repository'),
+      {
+        target: { value: 'https://github.com/example-org/legacy-app' },
+      },
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Analyze Repo/i }));
+
+    await waitFor(() => {
+      expect(mockRunAnalyzePhase).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Configure & Build/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Generate Playbook/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Migration Playbook Review/i),
+      ).toBeInTheDocument();
+    });
+
+    expect(screen.getByText(/Estimated Gemini Usage/i)).toBeInTheDocument();
+    expect(screen.getByText(/~\$0\.0123/i)).toBeInTheDocument();
+  });
+
+  it('stores completed runs in migration history dashboard', async () => {
+    render(<RepoMigration />);
+
+    fireEvent.change(
+      screen.getByPlaceholderText('https://github.com/username/repository'),
+      {
+        target: { value: 'https://github.com/example-org/legacy-app' },
+      },
+    );
+    fireEvent.click(screen.getByRole('button', { name: /Analyze Repo/i }));
+
+    await waitFor(() => {
+      expect(mockRunAnalyzePhase).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Configure & Build/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Generate Playbook/i }));
+
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name: /Approve & Start Generation/i,
+      }),
+    );
+
+    await waitFor(() => {
+      expect(mockRunGeneratePhase).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(mockRunVerificationPhase).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(screen.getByText(/Migration History/i)).toBeInTheDocument();
+    });
+    expect(
+      screen.getByText('https://github.com/example-org/legacy-app'),
+    ).toBeInTheDocument();
   });
 
   it('allows editing generated target file content inline', async () => {
@@ -338,7 +453,15 @@ describe('RepoMigration', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: /Configure & Build/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Start Migration/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Generate Playbook/i }));
+
+    await waitFor(() => {
+      expect(mockRunPlanReviewPhase).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /Approve & Start Generation/i }),
+    );
 
     await waitFor(() => {
       expect(mockRunGeneratePhase).toHaveBeenCalledTimes(1);
@@ -379,10 +502,21 @@ describe('RepoMigration', () => {
     });
 
     fireEvent.click(screen.getByRole('button', { name: /Configure & Build/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Start Migration/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Generate Playbook/i }));
+
+    await waitFor(() => {
+      expect(mockRunPlanReviewPhase).toHaveBeenCalledTimes(1);
+    });
+
+    fireEvent.click(
+      screen.getByRole('button', { name: /Approve & Start Generation/i }),
+    );
 
     await waitFor(() => {
       expect(mockRunGeneratePhase).toHaveBeenCalledTimes(1);
+    });
+    await waitFor(() => {
+      expect(mockRunVerificationPhase).toHaveBeenCalledTimes(1);
     });
 
     fireEvent.click(screen.getByRole('button', { name: /Regenerate File/i }));

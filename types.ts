@@ -22,6 +22,58 @@ export interface MigrationConfig {
   testingLibrary: 'vitest' | 'jest' | 'none';
 }
 
+export interface MigrationPlaybookQuestion {
+  id: string;
+  title: string;
+  question: string;
+  options: string[];
+  recommendedOption?: string;
+  rationale?: string;
+  required: boolean;
+}
+
+export interface MigrationPlaybook {
+  overview: string;
+  objective: string;
+  conversionHighlights: string[];
+  executionPlan: string[];
+  targetArtifacts: string[];
+  riskMitigations: string[];
+  questions: MigrationPlaybookQuestion[];
+}
+
+export interface MigrationCostEstimateStage {
+  stage: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  estimatedCostUsd: number;
+}
+
+export interface MigrationCostEstimate {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  estimatedCostUsd: number;
+  assumptions: string[];
+  stageBreakdown: MigrationCostEstimateStage[];
+}
+
+export interface MigrationHistoryEntry {
+  id: string;
+  timestamp: number;
+  repoUrl: string;
+  sourceFramework: string;
+  complexity: 'Low' | 'Medium' | 'High';
+  sourceFiles: number;
+  generatedFiles: number;
+  durationSeconds: number;
+  modernizationScore: number;
+  estimatedCostUsd: number;
+  estimatedTokens: number;
+  config: MigrationConfig;
+}
+
 export interface RepoAnalysisResult extends AnalysisResult {
   detectedFramework: string;
   recommendedTarget: string;
@@ -133,6 +185,12 @@ export interface RepoState {
   githubRateLimit: GitHubRateLimitInfo | null;
   repoScope: RepoScopeInfo | null;
   generationProgress: GenerationProgress | null;
+  playbook: MigrationPlaybook | null;
+  playbookNotes: string;
+  clarificationAnswers: Record<string, string>;
+  costEstimate: MigrationCostEstimate | null;
+  history: MigrationHistoryEntry[];
+  awaitingPlanApproval: boolean;
 }
 
 export const LANGUAGES = [

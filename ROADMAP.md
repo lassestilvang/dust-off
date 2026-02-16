@@ -28,6 +28,10 @@
 - Completed: #30 Environment variable validation at startup
 - Completed: #9 Editable generated code
 - Completed: #10 Per-file regeneration
+- Completed: #32 Migration playbook / plan review step
+- Completed: #33 Interactive migration (human-in-the-loop clarifications)
+- Completed: #34 Cost estimator
+- Completed: #35 Migration history dashboard
 
 ## 🏗️ ARCHITECTURE & CODE QUALITY
 
@@ -171,16 +175,16 @@
 - [ ] **31. GitHub App integration — "Open PR with migrated code"**
       Instead of just downloading a zip, let users create a new repo or open a PR directly from DustOff with the generated code.
 
-- [ ] **32. Migration playbook / plan review step**
+- [x] **32. Migration playbook / plan review step**
       Before generating code, show users a detailed migration plan: "We'll convert 12 Vue components into React Server Components, replace Vuex with Zustand, and add 8 test files." Let them approve/modify before execution.
 
-- [ ] **33. Interactive migration — human-in-the-loop**
+- [x] **33. Interactive migration — human-in-the-loop**
       For complex files, let the AI ask the user questions: "This file uses a custom auth system. Should I migrate to NextAuth.js or keep the custom implementation?"
 
-- [ ] **34. Cost estimator**
+- [x] **34. Cost estimator**
       Show estimated Gemini API token usage/cost before starting a migration, based on repo size.
 
-- [ ] **35. Migration history dashboard**
+- [x] **35. Migration history dashboard**
       Track past migrations, let users compare different runs, and show improvement trends.
 
 ---
@@ -203,7 +207,7 @@
 | 🟢 P2    | [x] #24 Copy to clipboard               | Medium | Trivial |
 | 🟢 P2    | [x] #20 Session persistence             | Medium | Low     |
 | 🟢 P2    | [ ] #11 Multiple target frameworks      | High   | High    |
-| 🟢 P2    | [ ] #32 Migration plan review           | High   | Medium  |
+| 🟢 P2    | [x] #32 Migration plan review           | High   | Medium  |
 | 🔵 P3    | [ ] #31 GitHub PR integration           | High   | High    |
-| 🔵 P3    | [ ] #33 Human-in-the-loop               | High   | High    |
+| 🔵 P3    | [x] #33 Human-in-the-loop               | High   | High    |
 | 🔵 P3    | [ ] #27 E2E tests                       | Medium | Medium  |

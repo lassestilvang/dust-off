@@ -5,6 +5,8 @@ import {
   CONVERSION_PROMPT_TEMPLATE,
   GENERATION_PROMPT_TEMPLATE,
   GENERATION_SYSTEM_INSTRUCTION,
+  MIGRATION_PLAYBOOK_PROMPT_TEMPLATE,
+  PLAYBOOK_SYSTEM_INSTRUCTION,
   PROJECT_SCAFFOLD_PROMPT,
   REPO_ANALYSIS_PROMPT_TEMPLATE,
   REPO_ANALYSIS_SYSTEM_INSTRUCTION,
@@ -15,6 +17,7 @@ import {
 } from '../constants';
 import {
   AnalysisResult,
+  MigrationPlaybook,
   MigrationConfig,
   RepoAnalysisResult,
   RepoVerificationResult,
@@ -175,6 +178,154 @@ const normalizeRepoAnalysis = (
         : 'A generic software architecture diagram.',
     semanticFileMappings,
     migrationNotes,
+  };
+};
+
+const normalizePlaybookQuestionId = (value: string, index: number): string => {
+  const normalized = value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return normalized || `question_${index + 1}`;
+};
+
+const normalizeMigrationPlaybook = (
+  payload: Partial<MigrationPlaybook> | null | undefined,
+): MigrationPlaybook => {
+  const conversionHighlights = Array.isArray(payload?.conversionHighlights)
+    ? payload!.conversionHighlights
+        .filter((item): item is string => typeof item === 'string')
+        .slice(0, 8)
+    : [];
+
+  const executionPlan = Array.isArray(payload?.executionPlan)
+    ? payload!.executionPlan
+        .filter((item): item is string => typeof item === 'string')
+        .slice(0, 8)
+    : [];
+
+  const targetArtifacts = Array.isArray(payload?.targetArtifacts)
+    ? payload!.targetArtifacts
+        .filter((item): item is string => typeof item === 'string')
+        .slice(0, 8)
+    : [];
+
+  const riskMitigations = Array.isArray(payload?.riskMitigations)
+    ? payload!.riskMitigations
+        .filter((item): item is string => typeof item === 'string')
+        .slice(0, 8)
+    : [];
+
+  const questions = Array.isArray(payload?.questions)
+    ? payload!.questions
+        .map((question, index) => {
+          const options = Array.isArray(question?.options)
+            ? question.options.filter(
+                (option): option is string => typeof option === 'string',
+              )
+            : [];
+          const recommendedOption =
+            typeof question?.recommendedOption === 'string' &&
+            options.includes(question.recommendedOption)
+              ? question.recommendedOption
+              : options[0];
+
+          return {
+            id: normalizePlaybookQuestionId(
+              typeof question?.id === 'string'
+                ? question.id
+                : typeof question?.title === 'string'
+                  ? question.title
+                  : `question_${index + 1}`,
+              index,
+            ),
+            title:
+              typeof question?.title === 'string' && question.title.trim()
+                ? question.title
+                : `Decision ${index + 1}`,
+            question:
+              typeof question?.question === 'string' && question.question.trim()
+                ? question.question
+                : 'Please review this migration decision.',
+            options,
+            recommendedOption,
+            rationale:
+              typeof question?.rationale === 'string' ? question.rationale : '',
+            required: question?.required !== false,
+          };
+        })
+        .filter((question) => question.options.length > 0)
+        .slice(0, 5)
+    : [];
+
+  return {
+    overview:
+      typeof payload?.overview === 'string' && payload.overview.trim()
+        ? payload.overview
+        : 'Review the generated migration plan before code generation starts.',
+    objective:
+      typeof payload?.objective === 'string' && payload.objective.trim()
+        ? payload.objective
+        : 'Deliver a production-ready Next.js + TypeScript project with parity to the legacy repository.',
+    conversionHighlights:
+      conversionHighlights.length > 0
+        ? conversionHighlights
+        : [
+            'Map legacy features to App Router pages and server-first patterns.',
+          ],
+    executionPlan:
+      executionPlan.length > 0
+        ? executionPlan
+        : [
+            'Validate scaffold and critical file mappings.',
+            'Generate target files with semantic source context.',
+            'Run multi-pass verification and apply safe fixes.',
+          ],
+    targetArtifacts:
+      targetArtifacts.length > 0
+        ? targetArtifacts
+        : ['app/', 'components/', 'lib/', 'package.json'],
+    riskMitigations:
+      riskMitigations.length > 0
+        ? riskMitigations
+        : [
+            'Review auth/data flow decisions before generation.',
+            'Use post-generation verification for cross-file integrity.',
+          ],
+    questions:
+      questions.length > 0
+        ? questions
+        : [
+            {
+              id: 'auth_strategy',
+              title: 'Authentication Migration',
+              question:
+                'If the legacy project has custom authentication, should migration keep it or move to NextAuth-compatible patterns?',
+              options: [
+                'Keep custom authentication behavior',
+                'Adopt NextAuth-compatible patterns',
+              ],
+              recommendedOption: 'Keep custom authentication behavior',
+              rationale:
+                'Preserving current auth semantics lowers regression risk for first migration pass.',
+              required: true,
+            },
+            {
+              id: 'data_fetching',
+              title: 'Data Fetching Strategy',
+              question:
+                'Should data-heavy routes default to server components with async fetches?',
+              options: [
+                'Yes, prefer server components',
+                'Keep client-driven fetching where possible',
+              ],
+              recommendedOption: 'Yes, prefer server components',
+              rationale:
+                'Server components are aligned with Next.js App Router defaults and reduce client bundle size.',
+              required: true,
+            },
+          ],
   };
 };
 
@@ -389,6 +540,56 @@ export const generateProjectStructure = async (
     }
     console.error('Failed to parse scaffold JSON', e);
     return ['package.json', 'app/page.tsx', 'app/layout.tsx', 'README.md'];
+  }
+};
+
+export const generateMigrationPlaybook = async (
+  analysis: RepoAnalysisResult,
+  generatedFilePaths: string[],
+  config: MigrationConfig,
+  options?: GeminiRequestOptions,
+): Promise<MigrationPlaybook> => {
+  const client = createClient();
+  const abortSignal = options?.abortSignal;
+  const userConfigStr = JSON.stringify(config, null, 2);
+  const serializedPaths = JSON.stringify(generatedFilePaths, null, 2);
+
+  const prompt = MIGRATION_PLAYBOOK_PROMPT_TEMPLATE.replace(
+    '{analysisSummary}',
+    analysis.summary,
+  )
+    .replace('{detectedFramework}', analysis.detectedFramework)
+    .replace('{complexity}', analysis.complexity)
+    .replace('{generatedFilePaths}', serializedPaths)
+    .replace('{userConfig}', userConfigStr);
+
+  try {
+    const response = await withRetry<GenerateContentResponse>(
+      () =>
+        client.models.generateContent({
+          model: 'gemini-3-pro-preview',
+          contents: prompt,
+          config: {
+            abortSignal,
+            systemInstruction: PLAYBOOK_SYSTEM_INSTRUCTION,
+            responseMimeType: 'application/json',
+            thinkingConfig: { thinkingBudget: 2048 },
+          },
+        }),
+      { abortSignal },
+    );
+
+    const parsed = safeParseJson<Partial<MigrationPlaybook>>(
+      response.text || '{}',
+      {},
+    );
+    return normalizeMigrationPlaybook(parsed);
+  } catch (error) {
+    if (isAbortError(error)) {
+      throw error;
+    }
+    console.error('Failed to generate migration playbook', error);
+    return normalizeMigrationPlaybook(undefined);
   }
 };
 

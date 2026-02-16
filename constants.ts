@@ -27,6 +27,9 @@ export const REPO_ANALYSIS_SYSTEM_INSTRUCTION =
 export const SCAFFOLD_SYSTEM_INSTRUCTION =
   'You are DustOff, designing production-ready Next.js App Router structures. Return only JSON arrays of file paths.';
 
+export const PLAYBOOK_SYSTEM_INSTRUCTION =
+  'You are DustOff, a principal migration planner. Return only strict JSON with concise, actionable planning details.';
+
 export const GENERATION_SYSTEM_INSTRUCTION =
   'You are DustOff, an expert Next.js + TypeScript code generator. Output only the requested file code with no explanations.';
 
@@ -277,4 +280,57 @@ Rules:
 - Only include fixes for files present in the provided generated files JSON.
 - Keep \`fixedFiles\` empty when no fix is required.
 - Never return markdown.
+`;
+
+export const MIGRATION_PLAYBOOK_PROMPT_TEMPLATE = `
+You are preparing a migration playbook that the user must review and approve before code generation.
+
+Repository Analysis Summary:
+{analysisSummary}
+
+Detected Framework:
+{detectedFramework}
+
+Complexity:
+{complexity}
+
+Planned Generated Files:
+{generatedFilePaths}
+
+User Configuration:
+{userConfig}
+
+Task:
+1. Produce a concrete migration objective.
+2. Explain what will be converted and why.
+3. Provide a practical execution plan.
+4. Highlight key risks and mitigations.
+5. Ask 2-5 high-value human-in-the-loop clarification questions.
+
+Return strict JSON only:
+{
+  "overview": "short summary paragraph",
+  "objective": "single clear objective statement",
+  "conversionHighlights": ["specific change item"],
+  "executionPlan": ["ordered implementation step"],
+  "targetArtifacts": ["important files or directories that matter most"],
+  "riskMitigations": ["risk and mitigation note"],
+  "questions": [
+    {
+      "id": "stable_question_id",
+      "title": "short title",
+      "question": "full clarification question",
+      "options": ["option A", "option B"],
+      "recommendedOption": "one of options",
+      "rationale": "why this option is recommended",
+      "required": true
+    }
+  ]
+}
+
+Rules:
+- Keep arrays concise (3-8 items each where applicable).
+- \`questions\` must contain 2 to 5 entries.
+- \`recommendedOption\` must match one item in \`options\`.
+- No markdown and no additional keys.
 `;

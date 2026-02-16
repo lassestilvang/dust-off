@@ -3,7 +3,9 @@ import {
   FileNode,
   GitHubRateLimitInfo,
   LogEntry,
+  MigrationCostEstimate,
   MigrationConfig,
+  MigrationPlaybook,
   MigrationReport,
   RepoAnalysisResult,
   RepoScopeInfo,
@@ -11,6 +13,7 @@ import {
 import { fetchFileContent, fetchRepoStructure } from './githubService';
 import {
   analyzeRepository,
+  generateMigrationPlaybook,
   generateArchitectureDiagram,
   generateNextJsFileStream,
   generateProjectStructure,
@@ -28,6 +31,13 @@ const MAX_ANALYSIS_PATHS = 500;
 const MAX_CONTEXT_FILES = 50;
 const MAX_RELATED_CONTEXT_FILES = 8;
 const REPO_VERIFICATION_PASSES = 2;
+const TOKENS_PER_CHAR = 1 / 4;
+const PRICING_PER_MILLION = {
+  proInputUsd: 3.5,
+  proOutputUsd: 10.5,
+  flashInputUsd: 0.35,
+  flashOutputUsd: 1.05,
+};
 
 type AddLogFn = (
   message: string,
@@ -75,6 +85,20 @@ export interface ScaffoldPhaseResult {
   graph: DependencyGraph;
   generatedFilePaths: string[];
   generatedFiles: FileNode[];
+}
+
+export interface PlanReviewPhaseInput {
+  analysis: RepoAnalysisResult;
+  generatedFilePaths: string[];
+  sourceContext: string;
+  config: MigrationConfig;
+  addLog: AddLogFn;
+  abortSignal?: AbortSignal;
+}
+
+export interface PlanReviewPhaseResult {
+  playbook: MigrationPlaybook;
+  costEstimate: MigrationCostEstimate;
 }
 
 export interface GeneratePhaseInput {
@@ -689,6 +713,174 @@ const collectCrossFileConsistencyIssues = (
   return Array.from(issues);
 };
 
+const tokensFromChars = (chars: number): number => {
+  return Math.max(1, Math.ceil(chars * TOKENS_PER_CHAR));
+};
+
+const estimateOutputTokensForPath = (path: string): number => {
+  if (/(\.test\.|\.spec\.|__tests__)/i.test(path)) {
+    return 420;
+  }
+  if (path.endsWith('.tsx')) {
+    return 520;
+  }
+  if (path.endsWith('.ts')) {
+    return 320;
+  }
+  if (path.endsWith('.json')) {
+    return 180;
+  }
+  if (path.endsWith('.css')) {
+    return 180;
+  }
+  if (path.endsWith('.md')) {
+    return 260;
+  }
+  return 240;
+};
+
+const estimateInputTokensForPath = (
+  sourceContextTokens: number,
+  path: string,
+): number => {
+  const contextSlice = Math.min(
+    24_000,
+    Math.max(1_500, Math.round(sourceContextTokens * 0.28)),
+  );
+  const promptOverhead = 950;
+  const relatedContext = /(\.tsx|\.ts|\.jsx|\.js)$/i.test(path) ? 640 : 320;
+  return contextSlice + promptOverhead + relatedContext;
+};
+
+const estimateUsd = (
+  inputTokens: number,
+  outputTokens: number,
+  model: 'pro' | 'flash',
+): number => {
+  const inputRate =
+    model === 'pro'
+      ? PRICING_PER_MILLION.proInputUsd
+      : PRICING_PER_MILLION.flashInputUsd;
+  const outputRate =
+    model === 'pro'
+      ? PRICING_PER_MILLION.proOutputUsd
+      : PRICING_PER_MILLION.flashOutputUsd;
+
+  return (
+    (inputTokens / 1_000_000) * inputRate +
+    (outputTokens / 1_000_000) * outputRate
+  );
+};
+
+export const estimateMigrationCost = ({
+  sourceContext,
+  generatedFilePaths,
+}: {
+  sourceContext: string;
+  generatedFilePaths: string[];
+}): MigrationCostEstimate => {
+  const fileCount = Math.max(generatedFilePaths.length, 1);
+  const sourceContextTokens = tokensFromChars(sourceContext.length);
+
+  const scaffoldInputTokens = 2_400 + fileCount * 18;
+  const scaffoldOutputTokens = 260 + fileCount * 24;
+
+  const playbookInputTokens = 2_000 + fileCount * 30;
+  const playbookOutputTokens = 1_100;
+
+  const generationInputTokens = generatedFilePaths.reduce(
+    (sum, path) => sum + estimateInputTokensForPath(sourceContextTokens, path),
+    0,
+  );
+  const generationOutputTokens = generatedFilePaths.reduce(
+    (sum, path) => sum + estimateOutputTokensForPath(path),
+    0,
+  );
+
+  const verificationInputTokens =
+    Math.round(generationOutputTokens * 1.45) * REPO_VERIFICATION_PASSES +
+    fileCount * 120;
+  const verificationOutputTokens = 480 * REPO_VERIFICATION_PASSES;
+
+  const stageBreakdown = [
+    {
+      stage: 'Scaffold Design',
+      model: 'gemini-3-pro-preview',
+      inputTokens: scaffoldInputTokens,
+      outputTokens: scaffoldOutputTokens,
+      estimatedCostUsd: Number(
+        estimateUsd(scaffoldInputTokens, scaffoldOutputTokens, 'pro').toFixed(
+          4,
+        ),
+      ),
+    },
+    {
+      stage: 'Playbook Planning',
+      model: 'gemini-3-pro-preview',
+      inputTokens: playbookInputTokens,
+      outputTokens: playbookOutputTokens,
+      estimatedCostUsd: Number(
+        estimateUsd(playbookInputTokens, playbookOutputTokens, 'pro').toFixed(
+          4,
+        ),
+      ),
+    },
+    {
+      stage: 'File Generation',
+      model: 'gemini-3-flash-preview',
+      inputTokens: generationInputTokens,
+      outputTokens: generationOutputTokens,
+      estimatedCostUsd: Number(
+        estimateUsd(
+          generationInputTokens,
+          generationOutputTokens,
+          'flash',
+        ).toFixed(4),
+      ),
+    },
+    {
+      stage: 'Cross-file Verification',
+      model: 'gemini-3-pro-preview',
+      inputTokens: verificationInputTokens,
+      outputTokens: verificationOutputTokens,
+      estimatedCostUsd: Number(
+        estimateUsd(
+          verificationInputTokens,
+          verificationOutputTokens,
+          'pro',
+        ).toFixed(4),
+      ),
+    },
+  ];
+
+  const inputTokens = stageBreakdown.reduce(
+    (sum, stage) => sum + stage.inputTokens,
+    0,
+  );
+  const outputTokens = stageBreakdown.reduce(
+    (sum, stage) => sum + stage.outputTokens,
+    0,
+  );
+  const estimatedCostUsd = Number(
+    stageBreakdown
+      .reduce((sum, stage) => sum + stage.estimatedCostUsd, 0)
+      .toFixed(4),
+  );
+
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens: inputTokens + outputTokens,
+    estimatedCostUsd,
+    assumptions: [
+      'Token usage uses a character-based heuristic and typical file-size priors.',
+      `Generation assumes ${REPO_VERIFICATION_PASSES} verification pass(es) after file creation.`,
+      'Pricing uses configurable per-million-token estimates and may differ from actual billing.',
+    ],
+    stageBreakdown,
+  };
+};
+
 export const runAnalyzePhase = async ({
   url,
   includeDirectories,
@@ -877,7 +1069,7 @@ export const runScaffoldPhase = async ({
   addLog(
     `Ingesting key legacy source files for context (Max ${MAX_CONTEXT_FILES})...`,
     'info',
-    AgentStatus.CONVERTING,
+    AgentStatus.PLANNING,
   );
 
   const candidateFiles = flattenFiles(sourceFiles).filter(
@@ -914,10 +1106,10 @@ export const runScaffoldPhase = async ({
   addLog(
     `Smart Context loaded: ${sourceContext.length} chars from ${filesToRead.length} files.`,
     'success',
-    AgentStatus.CONVERTING,
+    AgentStatus.PLANNING,
   );
 
-  addLog('Building Dependency Graph...', 'info', AgentStatus.CONVERTING);
+  addLog('Building Dependency Graph...', 'info', AgentStatus.PLANNING);
 
   const filesWithContent = filesToRead.map((file) => ({
     ...file,
@@ -929,13 +1121,13 @@ export const runScaffoldPhase = async ({
   addLog(
     `Dependency Graph built with ${Object.keys(graph).length} nodes.`,
     'success',
-    AgentStatus.CONVERTING,
+    AgentStatus.PLANNING,
   );
 
   addLog(
     `Designing Next.js 16.1 App Router project structure (${config.uiFramework}, ${config.stateManagement}, ${config.testingLibrary !== 'none' ? 'with tests' : 'no tests'})...`,
     'info',
-    AgentStatus.CONVERTING,
+    AgentStatus.PLANNING,
   );
 
   const generatedFilePaths = await generateProjectStructure(
@@ -950,7 +1142,7 @@ export const runScaffoldPhase = async ({
   addLog(
     `Project scaffolded: ${generatedFilePaths.length} files created.`,
     'success',
-    AgentStatus.CONVERTING,
+    AgentStatus.PLANNING,
   );
 
   return {
@@ -961,6 +1153,43 @@ export const runScaffoldPhase = async ({
     generatedFilePaths,
     generatedFiles,
   };
+};
+
+export const runPlanReviewPhase = async ({
+  analysis,
+  generatedFilePaths,
+  sourceContext,
+  config,
+  addLog,
+  abortSignal,
+}: PlanReviewPhaseInput): Promise<PlanReviewPhaseResult> => {
+  abortIfSignaled(abortSignal);
+  addLog(
+    'Drafting migration playbook and clarification questions...',
+    'info',
+    AgentStatus.PLANNING,
+  );
+
+  const playbook = await generateMigrationPlaybook(
+    analysis,
+    generatedFilePaths,
+    config,
+    { abortSignal },
+  );
+
+  abortIfSignaled(abortSignal);
+  const costEstimate = estimateMigrationCost({
+    sourceContext,
+    generatedFilePaths,
+  });
+
+  addLog(
+    `Playbook ready with ${playbook.questions.length} clarification question(s). Estimated cost: $${costEstimate.estimatedCostUsd.toFixed(4)}.`,
+    'success',
+    AgentStatus.PLANNING,
+  );
+
+  return { playbook, costEstimate };
 };
 
 export const runGeneratePhase = async ({

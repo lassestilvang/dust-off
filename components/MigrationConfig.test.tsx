@@ -51,7 +51,7 @@ describe('MigrationConfigModal', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    fireEvent.click(screen.getByRole('button', { name: /Start Migration/i }));
+    fireEvent.click(screen.getByRole('button', { name: /Generate Playbook/i }));
 
     expect(onCancel).toHaveBeenCalledTimes(1);
     expect(onConfirm).toHaveBeenCalledTimes(1);

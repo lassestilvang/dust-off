@@ -192,7 +192,7 @@ const MigrationConfigModal: React.FC<MigrationConfigProps> = ({
             onClick={onConfirm}
             className="px-6 py-2 bg-accent-600 hover:bg-accent-500 text-white font-bold rounded-lg shadow-lg shadow-accent-900/20 transition-all transform hover:scale-105"
           >
-            Start Migration
+            Generate Playbook
           </button>
         </div>
       </div>
